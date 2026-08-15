@@ -13,10 +13,9 @@ const {
 } = process.env;
 
 const twilioReady =
-  TWILIO_ACCOUNT_SID &&
-  TWILIO_AUTH_TOKEN &&
-  TWILIO_PHONE_NUMBER &&
-  TWILIO_ACCOUNT_SID !== "ACc1ad990858fe805a76115fd4f5203c16";
+  !!TWILIO_ACCOUNT_SID &&
+  !!TWILIO_AUTH_TOKEN &&
+  !!TWILIO_PHONE_NUMBER;
 
 if (twilioReady && process.env.USE_FAST2SMS !== "true") {
   try {
