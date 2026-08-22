@@ -161,6 +161,11 @@ export default function App() {
             {/* Public Routes */}
             <Route
               path="/"
+              element={<Navigate to="/civic-issues" replace />}
+            />
+
+            <Route
+              path="/civic-issues"
               element={<Landing />}
             />
 
