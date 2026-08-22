@@ -16,6 +16,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 
 // Pages
+import Hub from './pages/Hub';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import AdminLogin from './pages/AdminLogin';
@@ -31,6 +32,13 @@ import ComplaintMap from './pages/ComplaintMap';
 import ComplaintDetail from './pages/ComplaintDetail';
 
 import NotFound from './pages/NotFound';
+
+// Scheme Eligibility Checker (merged-in module)
+import SchemeLayout from './features/schemes/SchemeLayout';
+import SchemeHomePage from './features/schemes/pages/HomePage';
+import SchemeListPage from './features/schemes/pages/SchemeListPage';
+import SchemeDetailPage from './features/schemes/pages/SchemeDetailPage';
+import EligibilityCheckPage from './features/schemes/pages/EligibilityCheckPage';
 
 
 // ─────────────────────────────────────────────────────────────
@@ -161,8 +169,22 @@ export default function App() {
             {/* Public Routes */}
             <Route
               path="/"
+              element={<Hub />}
+            />
+
+            <Route
+              path="/civic-issues"
               element={<Landing />}
             />
+
+            {/* Government Scheme Eligibility Checker (merged-in module) —
+                public, no login required, matching its original design. */}
+            <Route path="/schemes" element={<SchemeLayout />}>
+              <Route index element={<SchemeHomePage />} />
+              <Route path="list" element={<SchemeListPage />} />
+              <Route path=":idOrSlug" element={<SchemeDetailPage />} />
+              <Route path=":idOrSlug/apply" element={<EligibilityCheckPage />} />
+            </Route>
 
             <Route
               path="/login"

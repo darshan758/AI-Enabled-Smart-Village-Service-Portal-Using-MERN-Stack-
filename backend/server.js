@@ -38,6 +38,14 @@ app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/superadmin', require('./routes/superAdminRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 
+// ================= SCHEME ELIGIBILITY CHECKER MODULE =================
+// Merged in from the separate scheme-eligibility-checker project.
+// Shares this same server/port/database — new collections only
+// (Scheme, Application), no changes to any existing model.
+app.use('/api/schemes', require('./scheme-module/routes/schemes'));
+app.use('/api/documents', require('./scheme-module/routes/documents'));
+app.use('/api/eligibility', require('./scheme-module/routes/eligibility'));
+
 // ================= PUBLIC VILLAGE ROUTE =================
 const Village = require('./models/Village');
 

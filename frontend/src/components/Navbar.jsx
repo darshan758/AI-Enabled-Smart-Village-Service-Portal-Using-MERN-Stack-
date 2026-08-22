@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import {
-  LogOut, Menu, X, Moon, Sun, MapPin, Home, FilePlus, Map, User, Bell, CheckCheck,
+  LogOut, Menu, X, Moon, Sun, MapPin, Home, FilePlus, Map, User, Bell, CheckCheck, FileCheck2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -94,6 +94,7 @@ export default function Navbar({ darkMode, toggleDark }) {
           { to: '/report', label: 'Report Issue', icon: FilePlus },
           { to: '/map', label: 'Map', icon: Map },
           { to: '/track', label: 'Track', icon: MapPin },
+          { to: '/schemes', label: 'Schemes', icon: FileCheck2 },
         ];
 
   const homeLink =

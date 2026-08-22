@@ -120,10 +120,17 @@ export default function AdminDashboard() {
   // FIXED
   const [updating, setUpdating] = useState(null);
 
-  // Tracks image URLs that failed to load (e.g. file missing on disk after
-  // a fresh clone, since /uploads is git-ignored) so we can show a friendly
-  // placeholder instead of a broken-image icon / dead link.
-  const [brokenImages, setBrokenImages] = useState(new Set());
+  // Tracks complaint/resolution photo URLs that failed to load, so we can
+  // show a graceful "unavailable" state instead of a broken link/404 page.
+  const [brokenImages, setBrokenImages] = useState(() => new Set());
+
+  const markImageBroken = (url) => {
+    setBrokenImages((prev) => {
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
+  };
 
 
   // ─────────────────────────────────────────────────────────
@@ -884,16 +891,14 @@ export default function AdminDashboard() {
                                 <img
                                   src={c.image}
                                   alt="Complaint"
+                                  onError={() => markImageBroken(c.image)}
                                   className="w-12 h-12 rounded-lg object-cover border border-gray-200 hover:opacity-80 transition"
-                                  onError={() =>
-                                    setBrokenImages((prev) => new Set(prev).add(c.image))
-                                  }
                                 />
                               </a>
                             ) : c.image ? (
                               <span
-                                title="This photo's file is missing on the server (often happens after a fresh clone, since uploads/ isn't stored in git)"
-                                className="text-xs text-gray-300 italic cursor-help"
+                                className="text-xs text-red-400 italic"
+                                title="This photo's file is missing from the server (e.g. lost/moved uploads folder)"
                               >
                                 Image unavailable
                               </span>
@@ -1043,20 +1048,21 @@ export default function AdminDashboard() {
                                       <img
                                         src={c.resolutionPhoto}
                                         alt="Proof of resolution"
+                                        onError={() => markImageBroken(c.resolutionPhoto)}
                                         className="w-7 h-7 rounded object-cover border border-green-300"
-                                        onError={() =>
-                                          setBrokenImages((prev) => new Set(prev).add(c.resolutionPhoto))
-                                        }
                                       />
                                     </a>
+                                  ) : c.resolutionPhoto ? (
+                                    <span
+                                      className="text-[10px] text-red-400 italic"
+                                      title="This photo's file is missing from the server"
+                                    >
+                                      unavailable
+                                    </span>
                                   ) : (
                                     <button
                                       onClick={() => handlePhotoButtonClick(c._id)}
-                                      title={
-                                        c.resolutionPhoto
-                                          ? "This photo's file is missing on the server — click to re-upload"
-                                          : 'Upload proof-of-resolution photo'
-                                      }
+                                      title="Upload proof-of-resolution photo"
                                       className="text-xs bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1 rounded-lg"
                                     >
                                       <Camera size={12} />
