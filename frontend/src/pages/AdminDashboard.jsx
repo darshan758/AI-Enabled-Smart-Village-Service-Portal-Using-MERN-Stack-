@@ -120,6 +120,11 @@ export default function AdminDashboard() {
   // FIXED
   const [updating, setUpdating] = useState(null);
 
+  // Tracks image URLs that failed to load (e.g. file missing on disk after
+  // a fresh clone, since /uploads is git-ignored) so we can show a friendly
+  // placeholder instead of a broken-image icon / dead link.
+  const [brokenImages, setBrokenImages] = useState(new Set());
+
 
   // ─────────────────────────────────────────────────────────
   // Dark Mode
@@ -869,7 +874,7 @@ export default function AdminDashboard() {
                           </td>
 
                           <td className="px-4 py-3">
-                            {c.image ? (
+                            {c.image && !brokenImages.has(c.image) ? (
                               <a
                                 href={c.image}
                                 target="_blank"
@@ -880,8 +885,18 @@ export default function AdminDashboard() {
                                   src={c.image}
                                   alt="Complaint"
                                   className="w-12 h-12 rounded-lg object-cover border border-gray-200 hover:opacity-80 transition"
+                                  onError={() =>
+                                    setBrokenImages((prev) => new Set(prev).add(c.image))
+                                  }
                                 />
                               </a>
+                            ) : c.image ? (
+                              <span
+                                title="This photo's file is missing on the server (often happens after a fresh clone, since uploads/ isn't stored in git)"
+                                className="text-xs text-gray-300 italic cursor-help"
+                              >
+                                Image unavailable
+                              </span>
                             ) : (
                               <span className="text-xs text-gray-300 italic">No image</span>
                             )}
@@ -1018,7 +1033,7 @@ export default function AdminDashboard() {
                                     className="hidden"
                                   />
 
-                                  {c.resolutionPhoto ? (
+                                  {c.resolutionPhoto && !brokenImages.has(c.resolutionPhoto) ? (
                                     <a
                                       href={c.resolutionPhoto}
                                       target="_blank"
@@ -1029,12 +1044,19 @@ export default function AdminDashboard() {
                                         src={c.resolutionPhoto}
                                         alt="Proof of resolution"
                                         className="w-7 h-7 rounded object-cover border border-green-300"
+                                        onError={() =>
+                                          setBrokenImages((prev) => new Set(prev).add(c.resolutionPhoto))
+                                        }
                                       />
                                     </a>
                                   ) : (
                                     <button
                                       onClick={() => handlePhotoButtonClick(c._id)}
-                                      title="Upload proof-of-resolution photo"
+                                      title={
+                                        c.resolutionPhoto
+                                          ? "This photo's file is missing on the server — click to re-upload"
+                                          : 'Upload proof-of-resolution photo'
+                                      }
                                       className="text-xs bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1 rounded-lg"
                                     >
                                       <Camera size={12} />

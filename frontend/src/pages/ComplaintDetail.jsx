@@ -22,6 +22,11 @@ export default function ComplaintDetail() {
   const [feedback, setFeedback] = useState('');
   const [submittingRating, setSubmittingRating] = useState(false);
 
+  // If the photo file is missing on disk (e.g. after a fresh clone, since
+  // uploads/ isn't stored in git), hide it instead of showing a broken icon.
+  const [imgBroken, setImgBroken] = useState(false);
+  const [resPhotoBroken, setResPhotoBroken] = useState(false);
+
   const toggleDark = () => {
     setDarkMode((d) => { document.documentElement.classList.toggle('dark', !d); return !d; });
   };
@@ -142,20 +147,30 @@ export default function ComplaintDetail() {
         </div>
 
         {/* Image */}
-        {image && (
+        {image && !imgBroken && (
           <div className="card p-4 mb-5">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Uploaded Image</h3>
-            <img src={image} alt="Complaint" className="w-full rounded-xl object-cover max-h-72" />
+            <img
+              src={image}
+              alt="Complaint"
+              className="w-full rounded-xl object-cover max-h-72"
+              onError={() => setImgBroken(true)}
+            />
           </div>
         )}
 
         {/* Resolution photo — proof uploaded by admin */}
-        {resolutionPhoto && (
+        {resolutionPhoto && !resPhotoBroken && (
           <div className="card p-4 mb-5">
             <h3 className="text-sm font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center gap-1.5">
               <CheckCircle2 size={15} /> Proof of Resolution
             </h3>
-            <img src={resolutionPhoto} alt="Resolution proof" className="w-full rounded-xl object-cover max-h-72" />
+            <img
+              src={resolutionPhoto}
+              alt="Resolution proof"
+              className="w-full rounded-xl object-cover max-h-72"
+              onError={() => setResPhotoBroken(true)}
+            />
           </div>
         )}
 
