@@ -40,6 +40,10 @@ import SchemeListPage from './features/schemes/pages/SchemeListPage';
 import SchemeDetailPage from './features/schemes/pages/SchemeDetailPage';
 import EligibilityCheckPage from './features/schemes/pages/EligibilityCheckPage';
 
+// Agricultural Market Price Checker (new native feature)
+import AgriLayout from './features/agri/AgriLayout';
+import MandiPricesPage from './features/agri/pages/MandiPricesPage';
+
 
 // ─────────────────────────────────────────────────────────────
 // Route Guards
@@ -184,6 +188,11 @@ export default function App() {
               <Route path="list" element={<SchemeListPage />} />
               <Route path=":idOrSlug" element={<SchemeDetailPage />} />
               <Route path=":idOrSlug/apply" element={<EligibilityCheckPage />} />
+            </Route>
+
+            {/* Agricultural Market Price Checker — public, no login required */}
+            <Route path="/agri" element={<AgriLayout />}>
+              <Route index element={<MandiPricesPage />} />
             </Route>
 
             <Route

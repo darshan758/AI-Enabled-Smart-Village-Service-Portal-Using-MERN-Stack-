@@ -206,13 +206,15 @@ ${complaint.trackingId}
       ).catch(console.error);
     }
 
-    // Notify admins
+    // Notify admins — only the district admin(s) for this complaint's own
+    // district, plus superadmins (who oversee all districts). Previously
+    // this notified every admin statewide regardless of district, which
+    // defeated the point of district-scoped administration.
     const admins = await User.find({
-
-      role: {
-        $in: ['admin', 'superadmin'],
-      },
-
+      $or: [
+        { role: 'admin', district: complaint.district },
+        { role: 'superadmin' },
+      ],
     }).select('_id');
 
     const notifications = admins.map((admin) => ({
@@ -220,6 +222,7 @@ ${complaint.trackingId}
       type: 'new_complaint',
       title: 'New Complaint Submitted',
       message: `New complaint submitted: "${title}"`,
+      complaint: complaint._id,
       isRead: false,
     }));
 
@@ -258,124 +261,6 @@ ${complaint.trackingId}
     });
   }
 };
-
-
-// ======================================================
-// @desc    Update Complaint Status
-// @route   PUT /api/complaints/:id/status
-// @access  Admin / SuperAdmin
-// ======================================================
-
-exports.updateComplaintStatus = async (req, res) => {
-
-  try {
-
-    const { id } = req.params;
-    const { status, remark } = req.body;
-
-    const validStatuses = [
-      'Pending',
-      'In Progress',
-      'Resolved',
-    ];
-
-    if (!validStatuses.includes(status)) {
-
-      return res.status(400).json({
-        message: 'Invalid status',
-      });
-    }
-
-    const updateData = {
-      status,
-      remark: remark || '',
-    };
-
-    if (status === 'Resolved') {
-      updateData.resolvedAt = new Date();
-    }
-
-    const complaint = await Complaint.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true }
-    ).populate(
-      'user',
-      'name mobile email'
-    );
-
-    if (!complaint) {
-
-      return res.status(404).json({
-        message: 'Complaint not found',
-      });
-    }
-
-    // Add Status History
-    complaint.statusHistory.push({
-      status,
-      changedBy: req.user.id,
-      note: remark || '',
-    });
-
-    await complaint.save();
-
-    // SMS Notification
-    if (complaint.user?.mobile) {
-
-      const msg =
-        status === 'Resolved'
-          ? `Your complaint "${complaint.title}" has been resolved successfully.`
-          : `Your complaint "${complaint.title}" is now "${status}".`;
-
-      await sendSMS(
-        complaint.user.mobile,
-        msg
-      ).catch(console.error);
-    }
-
-    // In-App Notification
-    await Notification.create({
-      recipient: complaint.user._id,
-      type: 'status_update',
-      title: 'Complaint Status Updated',
-      message: `Complaint "${complaint.title}" status updated to ${status}`,
-      complaint: complaint._id,
-      isRead: false,
-    });
-
-    // Real-time Socket Event
-    const io = getIO();
-
-    io.to(`user_${complaint.user._id}`).emit(
-      'notification',
-      {
-        message: `Complaint "${complaint.title}" is now ${status}`,
-      }
-    );
-
-    res.json({
-      success: true,
-      complaint,
-    });
-
-  } catch (err) {
-
-    console.error('Status update error:', err);
-
-    res.status(500).json({
-      message: 'Failed to update status',
-      error: err.message,
-    });
-  }
-};
-
-
-// ======================================================
-// @desc    Get My Complaints
-// @route   GET /api/complaints/my
-// @access  Private
-// ======================================================
 
 exports.getMyComplaints = async (req, res) => {
 

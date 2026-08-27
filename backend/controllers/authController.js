@@ -27,12 +27,13 @@ const generateToken = (id, role) =>
 // Generate Smart User ID
 // ─────────────────────────────────────────────────────────────
 const generateUserId = async (role = 'user') => {
+  const year = new Date().getFullYear();
   const prefix =
     role === 'superadmin'
-      ? 'SV2026-SUPER'
+      ? `SV${year}-SUPER`
       : role === 'admin'
-      ? 'SV2026-ADMIN'
-      : 'SV2026-USER';
+      ? `SV${year}-ADMIN`
+      : `SV${year}-USER`;
 
   const base = role === 'user' ? 1001 : 1;
 
@@ -282,31 +283,17 @@ const updateProfile = async (req, res, next) => {
   try {
     const {
       name,
-      phone,
-      state,
+      mobile,
+      phone, // accept either key from the client, same as register()
       district,
-      taluk,
-      village,
-      villageId,
-      panchayat,
-      wardNumber,
     } = req.body;
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
       {
         name,
-        phone,
-
-        state,
+        mobile: mobile || phone,
         district,
-        taluk,
-
-        village,
-        villageId,
-
-        panchayat,
-        wardNumber,
       },
       {
         new: true,

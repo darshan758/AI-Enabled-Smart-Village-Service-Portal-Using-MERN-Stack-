@@ -9,7 +9,8 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, FileCheck2, Sparkles, ArrowRight } from 'lucide-react';
+import { AlertTriangle, FileCheck2, TrendingUp, Sparkles, ArrowRight } from 'lucide-react';
+import FaqChatbot from '../components/FaqChatbot/FaqChatbot';
 
 const FEATURES = [
   {
@@ -32,6 +33,16 @@ const FEATURES = [
     to: '/schemes',
     status: 'active',
     color: 'blue',
+  },
+  {
+    id: 'agri-prices',
+    title: 'Agricultural Market Price Checker',
+    description:
+      "Check today's live mandi prices for common crops across Karnataka districts, sourced directly from the government's Agmarknet system.",
+    icon: TrendingUp,
+    to: '/agri',
+    status: 'active',
+    color: 'green',
   },
   // Add future features here, e.g.:
   // {
@@ -64,6 +75,12 @@ const COLOR_CLASSES = {
     badge: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30',
     ring: 'hover:ring-purple-300',
   },
+  green: {
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+    iconText: 'text-emerald-600',
+    badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30',
+    ring: 'hover:ring-emerald-300',
+  },
 };
 
 export default function Hub() {
@@ -94,7 +111,7 @@ export default function Hub() {
 
       {/* Feature Containers */}
       <div className="flex-1 px-6 pb-16">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f) => {
             const Icon = f.icon;
             const colors = COLOR_CLASSES[f.color] || COLOR_CLASSES.primary;
@@ -159,6 +176,9 @@ export default function Hub() {
       <footer className="text-center text-xs text-gray-400 pb-6 flex items-center justify-center gap-1.5">
         <Sparkles size={12} /> More village services will appear here as they're added
       </footer>
+
+      {/* FAQ chatbot widget — front page only, self-contained, no backend dependency */}
+      <FaqChatbot />
     </div>
   );
 }

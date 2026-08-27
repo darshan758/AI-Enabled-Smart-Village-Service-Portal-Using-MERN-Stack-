@@ -46,6 +46,10 @@ app.use('/api/schemes', require('./scheme-module/routes/schemes'));
 app.use('/api/documents', require('./scheme-module/routes/documents'));
 app.use('/api/eligibility', require('./scheme-module/routes/eligibility'));
 
+// ================= AGRICULTURAL MARKET PRICE CHECKER =================
+// Live daily mandi prices from India's official Agmarknet open data API.
+app.use('/api/agri', require('./routes/agriRoutes'));
+
 // ================= PUBLIC VILLAGE ROUTE =================
 const Village = require('./models/Village');
 

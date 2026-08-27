@@ -1,5 +1,4 @@
-const { verifyRequiredDocument, checkDocumentType } = require('../documentEngine');
-const { targetedOcr } = require('../ocrService');
+const { verifyRequiredDocument } = require('../documentEngine');
 
 const CASTE_CERT_INDICATORS = [
   ['caste certificate', 'community certificate'],
