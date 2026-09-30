@@ -49,8 +49,8 @@ export default function Login() {
         form.password
       );
 
-      // Citizen login only — admins/superadmins must use the Admin Portal
-      if (user.role === 'admin' || user.role === 'superadmin') {
+      // Citizen login only — admins/superadmins/departments must use the Admin Portal
+      if (['admin', 'superadmin', 'department'].includes(user.role)) {
         logout();
         toast.error('⚠️ Please login through the Admin Portal, not here.', { duration: 5000 });
         setLoading(false);
@@ -228,6 +228,15 @@ export default function Login() {
             >
               🔍 Track complaint without login
             </Link>
+
+          </p>
+
+          <p className="text-xs text-gray-400 border-t border-gray-100 dark:border-gray-800 pt-2 mt-2">
+
+            Are you a field worker or department staff?{' '}
+            <span className="text-gray-500 dark:text-gray-400">
+              Sign in right here using the email &amp; password your department gave you — you'll be sent straight to your dashboard.
+            </span>
 
           </p>
 

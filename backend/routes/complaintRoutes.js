@@ -8,6 +8,7 @@ const {
   getComplaint,
   getComplaintLocations,
   rateComplaint,
+  confirmResolution,
 } = require('../controllers/complaintController');
 
 const { protect } = require('../middleware/authMiddleware');
@@ -45,5 +46,8 @@ router.get('/:id', getComplaint);
 
 // citizen rates a resolved complaint
 router.put('/:id/rate', rateComplaint);
+
+// citizen confirms resolution or reopens it
+router.put('/:id/confirm', confirmResolution);
 
 module.exports = router;

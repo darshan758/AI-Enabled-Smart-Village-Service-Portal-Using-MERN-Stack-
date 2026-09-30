@@ -79,7 +79,7 @@ export default function EligibilityCheckPage() {
       const data = await checkEligibility({ schemeId: scheme._id, formData, files });
       setResult(data);
     } catch (err) {
-      setSubmitError(err.message);
+      setSubmitError(err.response?.data?.message || err.message);
     } finally {
       clearInterval(stepTimer);
       setSubmitting(false);
@@ -218,7 +218,7 @@ function ResultView({ scheme, result }) {
       <div className="sch-card">
         <h3>Why?</h3>
         <ul className="sch-reason-list">
-          {result.reasons.map((reason, i) => (
+          {(result.reasons || []).map((reason, i) => (
             <li key={i}>{reason}</li>
           ))}
         </ul>
@@ -226,13 +226,18 @@ function ResultView({ scheme, result }) {
 
       <div className="sch-card">
         <h3>Document Verification Results</h3>
-        {result.documentResults.map((doc) => (
+        {(result.documentResults || []).map((doc) => (
           <div key={doc.type} className="sch-doc-result-row">
             <div>
               <div>{doc.label}</div>
               <div className="sch-muted" style={{ fontSize: '0.82rem' }}>
                 {doc.message}
               </div>
+              {doc.verified && doc.extractedName && (
+                <div className="sch-muted" style={{ fontSize: '0.78rem' }}>
+                  Name read from document: {doc.extractedName}
+                </div>
+              )}
             </div>
             <DocPill verified={doc.verified} />
           </div>

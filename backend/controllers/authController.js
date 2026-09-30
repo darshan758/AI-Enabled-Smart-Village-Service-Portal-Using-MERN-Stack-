@@ -73,6 +73,10 @@ const userPayload = (user) => ({
 
   role: user.role,
 
+  departmentCategory: user.departmentCategory,
+  workerDepartment: user.workerDepartment,
+  workerCategories: user.workerCategories,
+
   adminVillage: user.adminVillage,
   adminVillageId: user.adminVillageId,
 });

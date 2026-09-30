@@ -58,11 +58,23 @@ async function fetchOnePage(apiKey, state, offset) {
   };
   if (state) params['filters[state]'] = state;
 
-  const { data } = await axios.get(BASE_URL, { params, timeout: 10000 });
-  return {
-    records: data.records || [],
-    total: data.total || 0,
-  };
+  try {
+    const { data } = await axios.get(BASE_URL, { params, timeout: 20000 });
+    return { records: data.records || [], total: data.total || 0 };
+  } catch (err) {
+    const status = err.response?.status;
+    const isTimeout = err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT';
+    // A single retry for transient failures — either a server-side error
+    // (500/502/503) or a plain timeout. data.gov.in is known to have
+    // brief blips and occasional slow responses on a large paginated
+    // fetch, both of which a short retry usually clears.
+    if ((status >= 500 && status <= 503) || isTimeout) {
+      await sleep(1500);
+      const { data } = await axios.get(BASE_URL, { params, timeout: 20000 });
+      return { records: data.records || [], total: data.total || 0 };
+    }
+    throw err;
+  }
 }
 
 /**
@@ -131,6 +143,23 @@ async function fetchMandiPrices({ state } = {}) {
     (partialFailure ? ` (stopped early: ${partialFailure.message})` : '') +
     ` Unique district values seen (${uniqueDistricts.length}): ${uniqueDistricts.join(', ')}`
   );
+  if (partialFailure?.response) {
+    // The status code alone ("500") isn't enough to diagnose anything —
+    // data.gov.in often puts the real reason (invalid key, rate limit,
+    // maintenance) in the response body. Logging it here means the next
+    // failure is actually debuggable instead of a bare number.
+    console.log(
+      `[Agri] Upstream error body (status ${partialFailure.response.status}):`,
+      JSON.stringify(partialFailure.response.data).slice(0, 500)
+    );
+    if (String(process.env.AGMARKNET_API_KEY).startsWith('579b464db66ec23bdd000001')) {
+      console.log(
+        '[Agri] NOTE: AGMARKNET_API_KEY is the publicly shared data.gov.in demo key ' +
+        '(used in countless tutorials). If failures are frequent, register your own free ' +
+        'key at https://data.gov.in/user/register and replace it in .env.'
+      );
+    }
+  }
 
   if (allRecords.length > 0) {
     // We got at least some usable data — cache and return it, even if

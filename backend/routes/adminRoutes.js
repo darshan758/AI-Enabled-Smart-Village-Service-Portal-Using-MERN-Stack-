@@ -7,10 +7,18 @@
 
 const express = require('express');
 const {
+  createDepartment,
+  bulkCreateStandardDepartments,
+  assignDepartmentToComplaint,
+  getDepartments,
+  toggleDepartmentStatus,
+  deleteDepartment,
   getDashboardStats,
   getAllComplaints,
   updateComplaintStatus,
   assignComplaint,
+  getWorkers,
+  verifyWork,
   deleteComplaint,
   getAllUsers,
   toggleUserStatus,
@@ -30,6 +38,14 @@ router.get('/complaints',                    getAllComplaints);
 router.get('/complaints/export',             exportComplaintsCSV);
 router.put('/complaints/:id/status',         updateComplaintStatus);
 router.put('/complaints/:id/assign',         assignComplaint);
+router.get('/departments',                    getDepartments);
+router.post('/departments',                   createDepartment);
+router.post('/departments/bulk-create-standard', bulkCreateStandardDepartments);
+router.put('/departments/:id/toggle',         toggleDepartmentStatus);
+router.delete('/departments/:id',             deleteDepartment);
+router.put('/complaints/:id/assign-department', assignDepartmentToComplaint);
+router.get('/workers',                       getWorkers);
+router.post('/complaints/:id/verify-work',   verifyWork);
 router.post('/complaints/:id/resolution-photo', upload.single('photo'), uploadResolutionPhoto);
 router.delete('/complaints/:id',             deleteComplaint);
 router.get('/users',                         getAllUsers);

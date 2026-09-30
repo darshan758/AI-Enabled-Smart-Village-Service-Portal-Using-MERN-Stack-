@@ -7,7 +7,7 @@ import api from '../utils/api';
 import {
   STATUS_COLORS, PRIORITY_COLORS, CATEGORY_ICONS, formatDateTime,
 } from '../utils/helpers';
-import { ArrowLeft, MapPin, Clock, Hash, User, Tag, Star, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Hash, User, Tag, Star, CheckCircle2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function ComplaintDetail() {
@@ -21,6 +21,11 @@ export default function ComplaintDetail() {
   const [hoverRating, setHoverRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [submittingRating, setSubmittingRating] = useState(false);
+
+  // Confirm / reopen widget state (Phase 2)
+  const [showReopenForm, setShowReopenForm] = useState(false);
+  const [reopenNote, setReopenNote] = useState('');
+  const [submittingConfirm, setSubmittingConfirm] = useState(false);
 
   // If the photo file is missing on disk (e.g. after a fresh clone, since
   // uploads/ isn't stored in git), hide it instead of showing a broken icon.
@@ -55,6 +60,29 @@ export default function ComplaintDetail() {
     }
   };
 
+  const submitConfirmation = async (confirmed) => {
+    if (confirmed === false && !showReopenForm) {
+      // First click on "No" just reveals the reason box — doesn't submit yet.
+      setShowReopenForm(true);
+      return;
+    }
+    setSubmittingConfirm(true);
+    try {
+      const { data } = await api.put(`/complaints/${id}/confirm`, {
+        confirmed,
+        note: confirmed ? undefined : (reopenNote.trim() || undefined),
+      });
+      setComplaint(data.complaint);
+      setShowReopenForm(false);
+      setReopenNote('');
+      toast.success(data.message);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit response');
+    } finally {
+      setSubmittingConfirm(false);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navbar darkMode={darkMode} toggleDark={toggleDark} />
@@ -77,6 +105,8 @@ export default function ComplaintDetail() {
     image, latitude, longitude, locationName, geoTagged,
     adminNote, createdAt, resolvedAt, user, statusHistory,
     resolutionPhoto, rating, ratingFeedback,
+    citizenConfirmation, reopenCount,
+    assignedWorkers, assignedDepartment, workerStage,
   } = complaint;
 
   return (
@@ -172,6 +202,148 @@ export default function ComplaintDetail() {
               onError={() => setResPhotoBroken(true)}
             />
           </div>
+        )}
+
+        {/* Who's handling this — visible once routed/assigned, before resolution */}
+        {status !== 'Resolved' && (assignedDepartment || assignedWorkers?.length > 0) && (
+          <div className="card p-4 mb-5 flex items-center gap-3 text-sm">
+            <User size={16} className="text-primary-500 flex-shrink-0" />
+            <div>
+              {assignedDepartment && (
+                <p className="text-gray-700 dark:text-gray-300">
+                  Routed to <span className="font-medium">{assignedDepartment.name}</span>
+                </p>
+              )}
+              {assignedWorkers?.length > 0 ? (
+                <p className="text-gray-500 text-xs mt-0.5">
+                  Assigned to {assignedWorkers.length > 1 ? 'field workers' : 'field worker'}{' '}
+                  <span className="font-medium">
+                    {assignedWorkers.map((w) => w.worker?.name + (w.worker?.teamSize > 1 ? ` (team of ${w.worker.teamSize})` : '') || 'a worker').join(', ')}
+                  </span>
+                  {workerStage && workerStage !== 'NotAssigned' && ` — ${workerStage}`}
+                </p>
+              ) : (
+                <p className="text-gray-400 text-xs mt-0.5">Waiting for a worker to be assigned</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Workers' before/after proof photos — uploaded when each person's part is done */}
+        {assignedWorkers?.some((w) => w.proof?.beforePhoto || w.proof?.afterPhoto) && (
+          <div className="card p-4 mb-5">
+            <h3 className="text-sm font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center gap-1.5">
+              <CheckCircle2 size={15} /> Worker{assignedWorkers.length > 1 ? "s'" : "'s"} Proof of Work
+            </h3>
+            <div className="space-y-4">
+              {assignedWorkers
+                .filter((w) => w.proof?.beforePhoto || w.proof?.afterPhoto)
+                .map((w) => (
+                  <div key={w.worker?._id || w.worker} className="border-t border-gray-100 dark:border-gray-800 pt-3 first:border-0 first:pt-0">
+                    {assignedWorkers.length > 1 && (
+                      <p className="text-xs font-medium text-gray-500 mb-2">— by {w.worker?.name || 'a worker'}{w.worker?.teamSize > 1 ? ` (team of ${w.worker.teamSize})` : ''}</p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {w.proof?.beforePhoto && (
+                        <div>
+                          <p className="text-xs font-medium text-gray-400 mb-1.5">Before</p>
+                          <img
+                            src={w.proof.beforePhoto}
+                            alt="Before work"
+                            className="w-full rounded-xl object-cover max-h-64"
+                          />
+                        </div>
+                      )}
+                      {w.proof?.afterPhoto && (
+                        <div>
+                          <p className="text-xs font-medium text-gray-400 mb-1.5">After</p>
+                          <img
+                            src={w.proof.afterPhoto}
+                            alt="After work"
+                            className="w-full rounded-xl object-cover max-h-64"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {w.proof?.workDescription && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">
+                        <span className="font-medium">Work done: </span>{w.proof.workDescription}
+                      </p>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Confirm resolution / reopen — only when Resolved and not yet responded */}
+        {status === 'Resolved' && citizenConfirmation?.confirmed === null && (
+          <div className="card p-5 mb-5 border-2 border-primary-100 dark:border-primary-900">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
+              Was your issue actually resolved?
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              This has been marked Resolved. Let us know if the problem is really fixed.
+            </p>
+
+            {!showReopenForm ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => submitConfirmation(true)}
+                  disabled={submittingConfirm}
+                  className="flex-1 flex items-center justify-center gap-2 text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl font-medium disabled:opacity-50"
+                >
+                  <ThumbsUp size={15} /> Yes, it's fixed
+                </button>
+                <button
+                  onClick={() => submitConfirmation(false)}
+                  disabled={submittingConfirm}
+                  className="flex-1 flex items-center justify-center gap-2 text-sm bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2.5 rounded-xl font-medium disabled:opacity-50"
+                >
+                  <ThumbsDown size={15} /> No, still broken
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <textarea
+                  value={reopenNote}
+                  onChange={(e) => setReopenNote(e.target.value)}
+                  placeholder="What's still wrong? (optional, but helps whoever picks this up)"
+                  rows={2}
+                  maxLength={300}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-400"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowReopenForm(false)}
+                    disabled={submittingConfirm}
+                    className="text-sm px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => submitConfirmation(false)}
+                    disabled={submittingConfirm}
+                    className="flex-1 text-sm bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl font-medium disabled:opacity-50"
+                  >
+                    {submittingConfirm ? 'Submitting…' : 'Reopen this complaint'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {citizenConfirmation?.confirmed === true && (
+          <div className="card p-4 mb-5 flex items-center gap-2 text-sm text-green-700 bg-green-50 dark:bg-green-900/20 dark:text-green-400">
+            <CheckCircle2 size={16} /> You confirmed this issue was resolved.
+          </div>
+        )}
+
+        {reopenCount > 0 && (
+          <p className="text-xs text-gray-400 mb-5 -mt-3">
+            This complaint has been reopened {reopenCount} time{reopenCount > 1 ? 's' : ''}.
+          </p>
         )}
 
         {/* Rating widget — only after Resolved */}

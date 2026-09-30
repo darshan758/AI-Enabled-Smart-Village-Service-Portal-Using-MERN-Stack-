@@ -1,8 +1,8 @@
 const { verifyRequiredDocument } = require('../documentEngine');
 
 const BANK_INDICATORS = [
-  ['bank', 'bank account', 'passbook', 'cancelled cheque', 'cancelled cheque'],
-  ['account number', 'a/c no', 'account no'],
+  ['bank', 'bank account', 'passbook', 'cancelled cheque', 'ಬ್ಯಾಂಕ್'],
+  ['account number', 'a/c no', 'account no', 'ಖಾತೆ ಸಂಖ್ಯೆ'],
   ['ifsc'],
   ['branch'],
 ];

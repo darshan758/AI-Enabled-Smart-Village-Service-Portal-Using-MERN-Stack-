@@ -1,20 +1,24 @@
-const { verifyRequiredDocument } = require('../documentEngine');
+const { verifyRequiredDocument, matchesKeyword } = require('../documentEngine');
+const { extractKannadaApplicantName } = require('../../utils/kannada');
 
 const CASTE_CERT_INDICATORS = [
-  ['caste certificate', 'community certificate'],
-  ['belongs to', 'caste'],
-  ['tehsildar', 'revenue officer', 'competent authority', 'issuing authority'],
+  ['caste certificate', 'community certificate', 'ಜಾತಿ ಪ್ರಮಾಣ', 'ಜಾತಿ ಪ್ರಮಾಣಪತ್ರ'],
+  ['belongs to', 'caste', 'ಜಾತಿ', 'ಪ್ರವರ್ಗ'],
+  ['tehsildar', 'revenue officer', 'competent authority', 'issuing authority', 'ತಹಸೀಲ್ದಾರ', 'nadakacheri'],
 ];
 
-// Known caste-category keywords we can confidently classify.
-// This list is intentionally explicit rather than "anything after
-// 'belongs to the caste'" being auto-accepted — see rule in section 17
-// of the spec: an unrelated caste (e.g. "Arya Vysya") must NOT pass
-// SC eligibility just because a caste certificate exists.
+// Known caste-category keywords we can confidently classify. Deliberately
+// explicit: an unrelated caste (e.g. "Arya Vysya") must NOT pass SC eligibility
+// just because a caste certificate exists. Kannada terms cover Nadakacheri
+// certificates: ಪರಿಶಿಷ್ಟ ಜಾತಿ = Scheduled Caste, ಪರಿಶಿಷ್ಟ ಪಂಗಡ = Scheduled Tribe,
+// ಹಿಂದುಳಿದ ವರ್ಗ / ಪ್ರವರ್ಗ = Backward Classes / Category (OBC).
 const CASTE_CATEGORY_KEYWORDS = {
-  SC: ['scheduled caste', ' sc ', '(sc)', 'sc caste'],
-  ST: ['scheduled tribe', ' st ', '(st)', 'st caste'],
-  OBC: ['other backward class', 'obc', 'backward class'],
+  SC: ['scheduled caste', '(sc)', 'sc caste', 'sc/st', 'ಪರಿಶಿಷ್ಟ ಜಾತಿ'],
+  ST: ['scheduled tribe', '(st)', 'st caste', 'ಪರಿಶಿಷ್ಟ ಪಂಗಡ'],
+  OBC: [
+    'other backward class', 'backward class', 'obc', 'category-i', 'category i', 'category-2a', 'category 2a',
+    'category-2b', 'category-3a', 'category-3b', 'ಹಿಂದುಳಿದ ವರ್ಗ', 'ಪ್ರವರ್ಗ',
+  ],
   GENERAL: ['general category', 'general caste'],
 };
 
@@ -60,10 +64,9 @@ function cleanup(raw) {
  * plus the raw matched phrase for transparency/debugging.
  */
 function extractCasteCategory(text) {
-  const lower = text.toLowerCase();
   for (const [category, keywords] of Object.entries(CASTE_CATEGORY_KEYWORDS)) {
     for (const kw of keywords) {
-      if (lower.includes(kw)) {
+      if (matchesKeyword(text, kw)) {
         return { category, matchedKeyword: kw };
       }
     }
@@ -90,7 +93,8 @@ async function verifyCasteCertificate(filePath) {
 
   if (!baseResult.verified) return baseResult;
 
-  const applicantName = extractApplicantNameFromCasteCert(baseResult.rawText);
+  const applicantName =
+    extractKannadaApplicantName(baseResult.rawText) || extractApplicantNameFromCasteCert(baseResult.rawText);
   const casteInfo = extractCasteCategory(baseResult.rawText);
 
   return {

@@ -1,3 +1,5 @@
+const { hasKannada, transliterateKannada } = require('./kannada');
+
 /**
  * normalizeDocumentName()
  *
@@ -109,9 +111,26 @@ function similarityScore(a, b) {
  *
  * Returns { match: boolean, score: number, reason: string }
  */
+function toComparable(name) {
+  // Kannada-script names are transliterated so they can be compared with English ones.
+  const romanized = hasKannada(name) ? transliterateKannada(name) : name;
+  return normalizeDocumentName(romanized).replace(/\bw/g, 'v');
+}
+
+// Trailing schwa: "ramesha" ~ "ramesh", "kumara" ~ "kumar"
+const stripSchwa = (t) => (t.length > 3 && t.endsWith('a') ? t.slice(0, -1) : t);
+
+function tokenMatches(tShort, tLong) {
+  if (similarityScore(stripSchwa(tShort), stripSchwa(tLong)) >= 0.85) return true;
+  // An initial ("M") matches a name/letter-name starting with or spelling it ("Mahesh", "em").
+  if (tShort.length === 1 && (tLong.startsWith(tShort) || (tLong.length <= 2 && tLong.includes(tShort)))) return true;
+  if (tLong.length === 1 && (tShort.startsWith(tLong) || (tShort.length <= 2 && tShort.includes(tLong)))) return true;
+  return false;
+}
+
 function documentNamesMatch(nameA, nameB, threshold = 0.82) {
-  const a = normalizeDocumentName(nameA);
-  const b = normalizeDocumentName(nameB);
+  const a = toComparable(nameA);
+  const b = toComparable(nameB);
 
   if (!a || !b) {
     return { match: false, score: 0, reason: 'One or both names are empty.' };
@@ -127,7 +146,7 @@ function documentNamesMatch(nameA, nameB, threshold = 0.82) {
 
   if (shorter.length > 0) {
     const allTokensFound = shorter.every((tokShort) =>
-      longer.some((tokLong) => similarityScore(tokShort, tokLong) >= 0.85)
+      longer.some((tokLong) => tokenMatches(tokShort, tokLong))
     );
     if (allTokensFound) {
       return { match: true, score: 0.95, reason: 'All name tokens found (token-level match).' };
@@ -146,7 +165,43 @@ function documentNamesMatch(nameA, nameB, threshold = 0.82) {
   };
 }
 
+/**
+ * nameFoundInText()
+ * Robust fallback when a name could not be *extracted* from a document
+ * (multi-column layouts, Kannada text, garbled OCR): instead of asking
+ * "what is the name on this document?", ask "does the name the applicant
+ * typed appear anywhere in the document's text?". Kannada words in the text
+ * are transliterated to Latin first, so "Darshan" is found in "ದರ್ಶನ್".
+ * Every full (2+ letter) token of the typed name must be found; initials
+ * are ignored, but at least one full token is required.
+ */
+function textTokens(rawText) {
+  const tokens = new Set();
+  const text = rawText || '';
+  (text.toLowerCase().match(/[a-z]{2,}/g) || []).forEach((t) => tokens.add(t));
+  (text.match(/[\u0C80-\u0CFF\u200c\u200d]+/g) || []).forEach((w) => {
+    const t = transliterateKannada(w).toLowerCase().replace(/[^a-z]/g, '');
+    if (t.length >= 2) tokens.add(t);
+  });
+  return [...tokens];
+}
+
+function nameFoundInText(typedName, rawText) {
+  const typedTokens = toComparable(typedName || '').split(' ').filter((t) => t.length >= 2);
+  if (typedTokens.length === 0) return { found: false, missing: [] };
+  const tokens = textTokens(rawText);
+  const isFound = (tok) =>
+    tokens.some(
+      (t) =>
+        t === tok ||
+        (tok.length >= 4 && t.length >= 4 && similarityScore(stripSchwa(tok), stripSchwa(t)) >= 0.85)
+    );
+  const missing = typedTokens.filter((t) => !isFound(t));
+  return { found: missing.length === 0, missing };
+}
+
 module.exports = {
+  nameFoundInText,
   normalizeDocumentName,
   normalizeIncomeValue,
   similarityScore,

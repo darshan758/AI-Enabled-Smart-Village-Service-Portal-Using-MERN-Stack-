@@ -47,6 +47,9 @@ import {
   Camera,
   Download,
   Printer,
+  UserCog,
+  ImageIcon,
+  Building2,
 } from 'lucide-react';
 
 import toast from 'react-hot-toast';
@@ -60,6 +63,7 @@ import { useAuth } from '../context/AuthContext';
 const TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart2 },
   { id: 'complaints', label: 'Complaints', icon: FileText },
+  { id: 'departments', label: 'Departments', icon: Building2 },
   { id: 'users', label: 'Users', icon: Users },
 ];
 
@@ -119,6 +123,62 @@ export default function AdminDashboard() {
 
   // FIXED
   const [updating, setUpdating] = useState(null);
+
+  // ── Worker proof verification (Admin keeps oversight ability to verify/
+  // reject a worker's submitted proof, same as a Department can — but
+  // Admin no longer creates worker accounts or assigns them to complaints;
+  // that's exclusively the owning Department's job now.) ──────────────────
+  // The complaint currently open in the "review worker proof" modal.
+  const [reviewComplaint, setReviewComplaint] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyNote, setVerifyNote] = useState('');
+
+  const openVerifyModal = (complaint) => {
+    setVerifyNote('');
+    setReviewComplaint(complaint);
+  };
+
+  const handleVerifyWork = async (approved) => {
+    if (!reviewComplaint) return;
+    setVerifying(true);
+    try {
+      const { data } = await api.post(
+        `/admin/complaints/${reviewComplaint._id}/verify-work`,
+        { approved, note: verifyNote.trim() || undefined }
+      );
+      setComplaints((prev) =>
+        prev.map((c) => (c._id === reviewComplaint._id ? data.complaint : c))
+      );
+      toast.success(
+        approved ? 'Work verified — complaint resolved' : 'Sent back to worker'
+      );
+      setReviewComplaint(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit review');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Human-readable label + color for the compact worker-stage badge.
+  const WORKER_STAGE_LABEL = {
+    NotAssigned: 'Not assigned',
+    Assigned: 'Assigned',
+    Accepted: 'Accepted',
+    LocationConfirmed: 'On site',
+    Working: 'Working',
+    ProofSubmitted: 'Proof submitted',
+    Verified: 'Verified',
+  };
+
+  const WORKER_STAGE_COLOR = {
+    Assigned: 'bg-gray-100 text-gray-700',
+    Accepted: 'bg-blue-100 text-blue-700',
+    LocationConfirmed: 'bg-indigo-100 text-indigo-700',
+    Working: 'bg-amber-100 text-amber-700',
+    ProofSubmitted: 'bg-purple-100 text-purple-700',
+    Verified: 'bg-green-100 text-green-700',
+  };
 
   // Tracks complaint/resolution photo URLs that failed to load, so we can
   // show a graceful "unavailable" state instead of a broken link/404 page.
@@ -287,6 +347,112 @@ export default function AdminDashboard() {
   }, [tab]);
 
 
+
+  // ─────────────────────────────────────────────────────────
+  // Fetch Departments list (for the Departments tab)
+  // ─────────────────────────────────────────────────────────
+
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+  const [showAddDepartment, setShowAddDepartment] = useState(false);
+  const emptyDepartmentForm = { name: '', email: '', password: '', mobile: '', departmentCategory: '' };
+  const [departmentForm, setDepartmentForm] = useState(emptyDepartmentForm);
+  const [creatingDepartment, setCreatingDepartment] = useState(false);
+  const [bulkCreating, setBulkCreating] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null); // { created: [...] } shown once, has plaintext passwords
+
+  const handleBulkCreateStandard = async () => {
+    setBulkCreating(true);
+    try {
+      const { data } = await api.post('/admin/departments/bulk-create-standard');
+      if (data.created.length === 0) {
+        toast('Every standard department already exists for your district.');
+      } else {
+        setBulkResult(data.created);
+        toast.success(`Created ${data.created.length} department account(s)`);
+      }
+      fetchDepartmentsList();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create standard departments');
+    } finally {
+      setBulkCreating(false);
+    }
+  };
+
+  const fetchDepartmentsList = async () => {
+    setLoadingDepartments(true);
+    try {
+      const { data } = await api.get('/admin/departments');
+      setDepartmentsList(data.departments);
+    } catch (err) {
+      toast.error('Failed to load departments');
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
+
+  const handleCreateDepartment = async (e) => {
+    e.preventDefault();
+    setCreatingDepartment(true);
+    try {
+      await api.post('/admin/departments', departmentForm);
+      toast.success('Department created');
+      setDepartmentForm(emptyDepartmentForm);
+      setShowAddDepartment(false);
+      fetchDepartmentsList();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create department');
+    } finally {
+      setCreatingDepartment(false);
+    }
+  };
+
+  const handleToggleDepartment = async (id) => {
+    try {
+      await api.put(`/admin/departments/${id}/toggle`);
+      fetchDepartmentsList();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update department');
+    }
+  };
+
+  const handleDeleteDepartment = async (id) => {
+    if (!window.confirm('Delete this department account?')) return;
+    try {
+      await api.delete(`/admin/departments/${id}`);
+      toast.success('Department deleted');
+      fetchDepartmentsList();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete department');
+    }
+  };
+
+  const [reassigningId, setReassigningId] = useState(null);
+  const handleReassignDepartment = async (complaintId, departmentId) => {
+    if (!departmentId) return;
+    setReassigningId(complaintId);
+    try {
+      const { data } = await api.put(`/admin/complaints/${complaintId}/assign-department`, { departmentId });
+      setComplaints((prev) => prev.map((c) => (c._id === complaintId ? { ...c, ...data.complaint } : c)));
+      toast.success(data.message);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to assign department');
+    } finally {
+      setReassigningId(null);
+    }
+  };
+
+  useEffect(() => {
+
+    if (tab === 'departments' || tab === 'complaints') {
+      fetchDepartmentsList();
+    }
+
+  }, [tab]);
+
+
+
+
   // ─────────────────────────────────────────────────────────
   // Instant Status Update
   // ─────────────────────────────────────────────────────────
@@ -295,7 +461,6 @@ export default function AdminDashboard() {
     complaintId,
     newStatus
   ) => {
-
     try {
 
       setUpdating(complaintId);
@@ -834,6 +999,7 @@ export default function AdminDashboard() {
                         'Location',
                         'Status',
                         'Priority',
+                        'Worker',
                         'Date',
                         'Actions',
                       ].map((h) => (
@@ -859,7 +1025,7 @@ export default function AdminDashboard() {
                       <tr>
 
                         <td
-                          colSpan={8}
+                          colSpan={9}
                           className="text-center py-12 text-gray-400"
                         >
                           No complaints found.
@@ -1018,6 +1184,74 @@ export default function AdminDashboard() {
                             {c.priority}
                           </td>
 
+                          {/* Department ownership / worker stage / verify */}
+                          <td className="px-4 py-3 min-w-[180px]">
+                            {!c.assignedWorkers || c.assignedWorkers.length === 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {c.assignedDepartment ? (
+                                  <>
+                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1">
+                                      <Building2 size={12} /> {c.assignedDepartment.name}
+                                    </span>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium w-fit bg-amber-100 text-amber-700">
+                                      Awaiting worker assignment
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-[11px] text-gray-400 italic">
+                                    No department covers this category/district yet
+                                  </span>
+                                )}
+                                <select
+                                  value=""
+                                  disabled={reassigningId === c._id}
+                                  onChange={(e) => handleReassignDepartment(c._id, e.target.value)}
+                                  className="text-[11px] border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-lg px-1.5 py-1 outline-none focus:ring-1 focus:ring-primary-500 w-fit max-w-[160px]"
+                                >
+                                  <option value="">
+                                    {reassigningId === c._id ? 'Assigning…' : c.assignedDepartment ? 'Reassign to…' : 'Assign to…'}
+                                  </option>
+                                  {departmentsList
+                                    .filter((d) => d.isActive)
+                                    .map((d) => (
+                                      <option key={d._id} value={d._id}>
+                                        {d.departmentCategory} — {d.name}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                {c.assignedWorkers.map((tw) => (
+                                  <span key={tw.worker?._id || tw.worker} className="text-xs font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1">
+                                    <UserCog size={12} /> {tw.worker?.name || 'Worker'}{tw.worker?.teamSize > 1 ? ` (team of ${tw.worker.teamSize})` : ''}{tw.isLead ? ' (lead)' : ''}
+                                  </span>
+                                ))}
+                                {c.assignedDepartment && (
+                                  <span className="text-[10px] text-gray-400">
+                                    via {c.assignedDepartment.name}
+                                  </span>
+                                )}
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium w-fit ${
+                                    WORKER_STAGE_COLOR[c.workerStage] || 'bg-gray-100 text-gray-600'
+                                  }`}
+                                >
+                                  {c.assignedWorkers.length > 1 ? `Team (${c.assignedWorkers.length}) — ` : ''}
+                                  {WORKER_STAGE_LABEL[c.workerStage] || c.workerStage}
+                                </span>
+                                {c.workerStage === 'ProofSubmitted' && (
+                                  <button
+                                    onClick={() => openVerifyModal(c)}
+                                    className="text-[11px] bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded-lg flex items-center gap-1 w-fit"
+                                  >
+                                    <ImageIcon size={11} /> Review proof
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
                           <td className="px-4 py-3 text-xs text-gray-400">
                             {timeAgo(
                               c.createdAt
@@ -1105,7 +1339,122 @@ export default function AdminDashboard() {
         )}
 
 
-        {/* USERS */}
+        {/* DEPARTMENTS */}
+        {tab === 'departments' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                Departments {departmentsList.length > 0 && `(${departmentsList.length})`}
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBulkCreateStandard}
+                  disabled={bulkCreating}
+                  className="text-sm px-4 py-2 rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50 dark:border-primary-800 dark:text-primary-400 disabled:opacity-50"
+                >
+                  {bulkCreating ? 'Setting up…' : '⚡ Quick Setup (all standard departments)'}
+                </button>
+                <button
+                  onClick={() => setShowAddDepartment(true)}
+                  className="btn-primary text-sm flex items-center gap-2"
+                >
+                  <Building2 size={15} /> Add Department
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Not sure what departments a district needs? Click "Quick Setup" — it creates one
+              department per complaint category (Electricity, Road Damage, Water Leakage, Garbage,
+              Drainage, Street Light) in one click, with a login generated for each. You can hand
+              those logins to whoever runs each department, or add a custom one manually instead.
+            </p>
+
+            {/* One-time credentials reveal after Quick Setup — passwords can't be shown again */}
+            {bulkResult && (
+              <div className="card p-4 border-2 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-400">
+                    Save these logins now — shown only once
+                  </h3>
+                  <button onClick={() => setBulkResult(null)} className="text-xs text-amber-600 hover:underline">
+                    Dismiss
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {bulkResult.map((d) => (
+                    <div key={d.email} className="text-xs font-mono bg-white dark:bg-gray-900 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">
+                      <span className="font-semibold not-italic">{d.departmentCategory}</span>
+                      <span>{d.email}</span>
+                      <span>pwd: {d.password}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {loadingDepartments ? (
+              <div className="flex justify-center py-12"><LoadingSpinner /></div>
+            ) : departmentsList.length === 0 ? (
+              <div className="card p-10 text-center text-gray-400">
+                No departments yet in your district. Click "Add Department" to create one —
+                e.g. an "Electricity Problem" department — it can then create its own
+                workers and start receiving matching complaints automatically.
+              </div>
+            ) : (
+              <div className="card overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800 text-left text-xs text-gray-500">
+                    <tr>
+                      {['Name', 'Category', 'Email', 'Mobile', 'Open complaints', 'Workers', 'Status', 'Actions'].map((h) => (
+                        <th key={h} className="px-4 py-2.5 font-medium">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {departmentsList.map((d) => (
+                      <tr key={d._id}>
+                        <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{d.name}</td>
+                        <td className="px-4 py-3">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                            {d.departmentCategory}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">{d.email}</td>
+                        <td className="px-4 py-3 text-gray-500">{d.mobile}</td>
+                        <td className="px-4 py-3 text-gray-500">{d.openComplaints}</td>
+                        <td className="px-4 py-3 text-gray-500">{d.workerCount}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => handleToggleDepartment(d._id)}
+                            className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                              d.isActive
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                            }`}
+                          >
+                            {d.isActive ? 'Active' : 'Inactive'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => handleDeleteDepartment(d._id)}
+                            title="Delete department permanently"
+                            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+
         {tab === 'users' && (
 
           <div className="card overflow-hidden">
@@ -1173,6 +1522,192 @@ export default function AdminDashboard() {
         )}
 
       </div>
+
+      {/* Add Department modal */}
+      {showAddDepartment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <form
+            onSubmit={handleCreateDepartment}
+            className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto"
+          >
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+              Add Department
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              This creates a login for one department covering one category in your district.
+              Complaints of that category will route to it automatically.
+            </p>
+
+            <div className="space-y-3">
+              <input
+                required
+                placeholder="Department name (e.g. Electricity Department)"
+                value={departmentForm.name}
+                onChange={(e) => setDepartmentForm((p) => ({ ...p, name: e.target.value }))}
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <input
+                required
+                type="email"
+                placeholder="Email (used to log in)"
+                value={departmentForm.email}
+                onChange={(e) => setDepartmentForm((p) => ({ ...p, email: e.target.value }))}
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <input
+                required
+                type="password"
+                placeholder="Temporary password"
+                minLength={6}
+                value={departmentForm.password}
+                onChange={(e) => setDepartmentForm((p) => ({ ...p, password: e.target.value }))}
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <input
+                required
+                placeholder="Mobile number"
+                value={departmentForm.mobile}
+                onChange={(e) => setDepartmentForm((p) => ({ ...p, mobile: e.target.value }))}
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary-500"
+              />
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">
+                  Category this department handles
+                </p>
+                <select
+                  required
+                  value={departmentForm.departmentCategory}
+                  onChange={(e) => setDepartmentForm((p) => ({ ...p, departmentCategory: e.target.value }))}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select a category…</option>
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => setShowAddDepartment(false)}
+                disabled={creatingDepartment}
+                className="text-sm px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={creatingDepartment}
+                className="btn-primary text-sm disabled:opacity-50"
+              >
+                {creatingDepartment ? 'Creating…' : 'Create Department'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Worker proof review modal (Phase 1) */}
+      {reviewComplaint && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+              Review worker completion
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              {reviewComplaint.trackingId} — {reviewComplaint.title}
+            </p>
+
+            <div className="space-y-4 mb-4">
+              {(reviewComplaint.assignedWorkers || []).map((tw) => (
+                <div key={tw.worker?._id || tw.worker} className="border-b border-gray-100 dark:border-gray-800 pb-4 last:border-0">
+                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    {tw.worker?.name || 'Worker'}{tw.worker?.teamSize > 1 ? ` (team of ${tw.worker.teamSize})` : ''}{tw.isLead ? ' (lead)' : ''}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">Before</p>
+                      {tw.proof?.beforePhoto ? (
+                        <img
+                          src={tw.proof.beforePhoto}
+                          alt="Before"
+                          className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-full h-32 flex items-center justify-center text-xs text-gray-300 border border-dashed rounded-lg">
+                          No photo
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">After</p>
+                      {tw.proof?.afterPhoto ? (
+                        <img
+                          src={tw.proof.afterPhoto}
+                          alt="After"
+                          className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-full h-32 flex items-center justify-center text-xs text-gray-300 border border-dashed rounded-lg">
+                          No photo
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {tw.proof?.workDescription && (
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      <span className="font-medium">Work done: </span>
+                      {tw.proof.workDescription}
+                    </p>
+                  )}
+                  {tw.proof?.materialsUsed && (
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      <span className="font-medium">Materials: </span>
+                      {tw.proof.materialsUsed}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <textarea
+              value={verifyNote}
+              onChange={(e) => setVerifyNote(e.target.value)}
+              placeholder="Optional note (visible to worker if you reject, or on the complaint history if you approve)"
+              rows={2}
+              maxLength={300}
+              className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3 py-2 mb-4 outline-none focus:ring-2 focus:ring-primary-500"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setReviewComplaint(null)}
+                disabled={verifying}
+                className="text-sm px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleVerifyWork(false)}
+                disabled={verifying}
+                className="text-sm px-4 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50"
+              >
+                Reject — send back
+              </button>
+              <button
+                onClick={() => handleVerifyWork(true)}
+                disabled={verifying}
+                className="text-sm px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {verifying ? 'Saving…' : 'Approve & resolve'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

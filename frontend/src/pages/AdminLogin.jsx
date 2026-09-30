@@ -19,15 +19,22 @@ export default function AdminLogin() {
     setLoading(true);
     try {
       const user = await login(form.identifier, form.password);
-      if (!['admin', 'superadmin'].includes(user.role)) {
-        // Not an admin — clear the session immediately so the person
-        // isn't left silently authenticated (and auto-redirected) as a citizen.
+      if (!['admin', 'superadmin', 'department'].includes(user.role)) {
+        // Not a back-office account — clear the session immediately so
+        // the person isn't left silently authenticated (and
+        // auto-redirected) as a citizen.
         logout();
         toast.error('Access denied. You are not authorized to access the admin portal.');
         return;
       }
       toast.success(`Welcome, ${user.name}!`);
-      navigate(user.role === 'superadmin' ? '/superadmin/dashboard' : '/admin/dashboard');
+      if (user.role === 'superadmin') {
+        navigate('/superadmin/dashboard');
+      } else if (user.role === 'department') {
+        navigate('/department/dashboard');
+      } else {
+        navigate('/admin/dashboard');
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Login failed. Check credentials.');
     } finally {
@@ -117,9 +124,9 @@ export default function AdminLogin() {
         </div>
 
         <p className="text-center text-sm text-gray-600 mt-5">
-          Not an admin?{' '}
+          Not an admin or department account?{' '}
           <Link to="/login" className="text-primary-500 hover:text-primary-400 font-medium">
-            Citizen Login →
+            Citizen &amp; Worker Login →
           </Link>
         </p>
       </div>

@@ -50,44 +50,76 @@ async function checkEligibility(req, res, next) {
     // Verify each required document that was actually uploaded.
     // Files arrive keyed by document type (see routes/eligibility.js
     // multer field config), e.g. req.files.aadhaar[0].
-    for (const reqDoc of requiredDocs) {
-      const fileArr = req.files ? req.files[reqDoc.type] : null;
-      const file = fileArr && fileArr[0];
+    //
+    // Each verifier runs OCR, which is CPU/time-heavy. Running them
+    // sequentially (await-in-loop) made total request time equal to
+    // the SUM of every document's OCR time — with 2+ uploads that
+    // reliably exceeded the frontend's 30s timeout. Kicking every
+    // verifier off together and awaiting them all at once lets them
+    // run concurrently, so total time is closer to the SLOWEST single
+    // document instead of the sum of all of them.
+    const settledResults = await Promise.all(
+      requiredDocs.map(async (reqDoc) => {
+        const fileArr = req.files ? req.files[reqDoc.type] : null;
+        const file = fileArr && fileArr[0];
 
-      if (!file) {
-        documentResultsForResponse.push({
-          type: reqDoc.type,
-          label: reqDoc.label,
-          verified: false,
-          message: `Please upload ${reqDoc.label}.`,
-        });
-        continue;
-      }
+        if (!file) {
+          return {
+            reqDoc,
+            response: {
+              type: reqDoc.type,
+              label: reqDoc.label,
+              verified: false,
+              message: `Please upload ${reqDoc.label}.`,
+            },
+          };
+        }
 
-      const verifier = getVerifierForType(reqDoc.type);
-      if (!verifier) {
-        documentResultsForResponse.push({
-          type: reqDoc.type,
-          label: reqDoc.label,
-          verified: false,
-          message: `No verifier is configured for document type "${reqDoc.type}".`,
-        });
-        continue;
-      }
+        const verifier = getVerifierForType(reqDoc.type);
+        if (!verifier) {
+          return {
+            reqDoc,
+            response: {
+              type: reqDoc.type,
+              label: reqDoc.label,
+              verified: false,
+              message: `No verifier is configured for document type "${reqDoc.type}".`,
+            },
+          };
+        }
 
-      // eslint-disable-next-line no-await-in-loop
-      const result = await verifier(file.path);
+        // A crash while reading ONE document (corrupt PDF, OCR failure...) must not
+        // take down the whole request with a 500 — report it for that document only.
+        let result;
+        try {
+          result = await verifier(file.path);
+        } catch (verifyErr) {
+          console.error(`[Eligibility] verifier for "${reqDoc.type}" crashed:`, verifyErr);
+          result = {
+            verified: false,
+            message: 'This document could not be processed. Please upload a clearer PDF or image.',
+          };
+        }
 
-      documentResultsByType[reqDoc.type] = result;
-      documentResultsForResponse.push({
-        type: reqDoc.type,
-        label: reqDoc.label,
-        originalFilename: file.originalname,
-        verified: result.verified,
-        message: result.message,
-        extractedName: result.extractedName || null,
-        extraFields: result.extraFields || {},
-      });
+        return {
+          reqDoc,
+          result,
+          response: {
+            type: reqDoc.type,
+            label: reqDoc.label,
+            originalFilename: file.originalname,
+            verified: result.verified,
+            message: result.message,
+            extractedName: result.extractedName || null,
+            extraFields: result.extraFields || {},
+          },
+        };
+      })
+    );
+
+    for (const { reqDoc, result, response } of settledResults) {
+      if (result) documentResultsByType[reqDoc.type] = result;
+      documentResultsForResponse.push(response);
     }
 
     const verdict = evaluateEligibility(scheme, formData, documentResultsByType);

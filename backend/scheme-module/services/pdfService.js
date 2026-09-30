@@ -4,7 +4,7 @@ const getPdf = async () => {
   const { pdf } = await import('pdf-to-img');
   return pdf;
 };
-const { ocrImageFile, MIN_READABLE_CHARS } = require('./ocrService');
+const { ocrImageFile, ocrImageFileSparse, MIN_READABLE_CHARS } = require('./ocrService');
 const path = require('path');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
@@ -22,7 +22,7 @@ const { v4: uuidv4 } = require('uuid');
  *
  * Returns { text, source: 'pdf-text' | 'ocr', readable, pageCount }
  */
-async function extractTextFromPdf(filePath) {
+async function extractTextFromPdf(filePath, { forceOcr = false, sparse = false } = {}) {
   const dataBuffer = fs.readFileSync(filePath);
   let directText = '';
   let pageCount = 1;
@@ -36,7 +36,7 @@ async function extractTextFromPdf(filePath) {
     directText = '';
   }
 
-  if (directText.length >= MIN_READABLE_CHARS) {
+  if (!forceOcr && !sparse && directText.length >= MIN_READABLE_CHARS) {
     return { text: directText, source: 'pdf-text', readable: true, pageCount };
   }
 
@@ -54,7 +54,7 @@ const document = await pdf(filePath, { scale: 2.0 });
       const imgPath = path.join(tmpDir, `${uuidv4()}.png`);
       fs.writeFileSync(imgPath, pageImage);
 
-      const { text, confidence } = await ocrImageFile(imgPath);
+      const { text, confidence } = sparse ? await ocrImageFileSparse(imgPath) : await ocrImageFile(imgPath);
       ocrTexts.push(text);
       confidences.push(confidence);
 

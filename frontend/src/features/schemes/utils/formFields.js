@@ -9,6 +9,12 @@ export function getVisibleFields(scheme) {
   if (!scheme) return [];
 
   const fields = [];
+
+  // Every scheme cross-checks the name across documents, so we always ask for
+  // the applicant's name. It is compared with each uploaded document.
+  if ((scheme.requiredDocuments || []).some((d) => d.requiresNameMatch) || (scheme.nameMatchGroup || []).length > 0) {
+    fields.push('fullName');
+  }
   const hasRestriction = (arr) => Array.isArray(arr) && arr.length > 0 && !arr.map((v) => v.toLowerCase()).includes('all');
 
   if (scheme.minAge !== null || scheme.maxAge !== null) {
@@ -43,6 +49,11 @@ export function getVisibleFields(scheme) {
 }
 
 export const FIELD_CONFIG = {
+  fullName: {
+    label: 'Full name (exactly as printed on your Aadhaar)',
+    type: 'text',
+    hint: 'Used to check that your documents belong to you. English or Kannada spelling both work.',
+  },
   age: { label: 'Age', type: 'number' },
   gender: {
     label: 'Gender',

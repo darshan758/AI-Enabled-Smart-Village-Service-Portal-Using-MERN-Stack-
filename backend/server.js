@@ -35,6 +35,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/complaints', require('./routes/complaintRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/admin/mediators', require('./routes/mediatorRotes'));
+app.use('/api/worker', require('./routes/workerRoutes'));
+app.use('/api/department', require('./routes/departmentRoutes'));
 app.use('/api/superadmin', require('./routes/superAdminRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 
@@ -136,6 +139,7 @@ mongoose
       const runAutoEscalation = require('./utils/autoEscalate');
       setTimeout(runAutoEscalation, 30 * 1000);
       setInterval(runAutoEscalation, 60 * 60 * 1000);
+
     });
   })
   .catch((err) => {

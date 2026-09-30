@@ -27,9 +27,17 @@ export default function AgriLayout() {
             <h1 style={{ fontSize: '1.25rem', margin: 0, color: '#0f172a' }}>Market Price Checker</h1>
           </Link>
 
-          <Link to="/" className="flex items-center gap-1.5" style={{ textDecoration: 'none', color: '#64748b', fontSize: '0.85rem' }}>
-            <ArrowLeft size={14} /> Back to Smart Village Portal
-          </Link>
+          <nav style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <Link to="/agri" style={{ textDecoration: 'none', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
+              Prices
+            </Link>
+            <Link to="/agri/advisory" style={{ textDecoration: 'none', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
+              Farmer Advisory
+            </Link>
+            <Link to="/" className="flex items-center gap-1.5" style={{ textDecoration: 'none', color: '#64748b', fontSize: '0.85rem' }}>
+              <ArrowLeft size={14} /> Back to Smart Village Portal
+            </Link>
+          </nav>
         </header>
       </div>
 

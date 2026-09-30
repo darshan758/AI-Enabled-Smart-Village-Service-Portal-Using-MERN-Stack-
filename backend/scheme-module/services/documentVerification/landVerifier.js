@@ -1,10 +1,14 @@
 const { verifyRequiredDocument } = require('../documentEngine');
 
+// English + Kannada (Karnataka RTC / Pahani is bilingual or Kannada-only).
 const LAND_INDICATORS = [
-  ['land record', 'record of rights', 'ror', 'pahani', '7/12', 'khasra', 'khatauni'],
-  ['owner', 'ownership', 'land owner'],
-  ['survey number', 'survey no', 'plot number', 'plot no'],
-  ['revenue department', 'tehsildar', 'land revenue'],
+  [
+    'land record', 'record of rights', 'rtc', 'ror', 'pahani', '7/12', 'khasra', 'khatauni', 'bhoomi',
+    'ಪಹಣಿ', 'ಆರ್‌ಟಿಸಿ', 'ಆರ್.ಟಿ.ಸಿ', 'ಹಕ್ಕುಗಳ ದಾಖಲೆ', 'ಭೂಮಿ',
+  ],
+  ['owner', 'ownership', 'land owner', 'khatedar', 'cultivator', 'ಮಾಲೀಕ', 'ಖಾತೆದಾರ', 'ಸಾಗುವಳಿದಾರ'],
+  ['survey number', 'survey no', 'plot number', 'plot no', 'ಸರ್ವೆ ನಂ', 'ಸರ್ವೆ ನಂಬರ್', 'ಸ.ನಂ', 'ಸರ್ವೆ'],
+  ['revenue department', 'tehsildar', 'land revenue', 'ಕಂದಾಯ', 'ತಹಸೀಲ್ದಾರ'],
 ];
 
 async function verifyLandOwnership(filePath) {

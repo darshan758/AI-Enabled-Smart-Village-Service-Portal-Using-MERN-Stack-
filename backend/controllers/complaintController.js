@@ -6,6 +6,10 @@ const { extractGeoTag } = require('../utils/exifExtractor');
 const sendSMS = require('../utils/smsService');
 const checkDuplicate = require('../utils/duplicateDetector');
 const detectPriority = require('../utils/autoPriority');
+const assignMediator = require('../scheme-module/utils/mediatorAssigner');
+const Mediator = require('../models/Mediator');
+const assignDepartment = require('../utils/departmentAssigner');
+const applyClusterBoost = require('../utils/clusterPriority');
 
 const { getIO } = require('../socket/socketHandler');
 
@@ -99,11 +103,11 @@ exports.createComplaint = async (req, res) => {
 
     // Current user
     const userDoc = await User.findById(req.user.id).select(
-      'name email mobile district'
+      'name email mobile district taluk'
     );
 
-    // Auto Priority
-    const finalPriority =
+    // Auto Priority (keyword/category based)
+    const basePriority =
       !priority || priority === 'Auto'
         ? detectPriority({
             title,
@@ -111,6 +115,16 @@ exports.createComplaint = async (req, res) => {
             category,
           })
         : priority;
+
+    // Cluster boost — several similar reports already open in this
+    // district recently push the priority up one level, on top of
+    // whatever the keyword-based score already gave it.
+    const clusterResult = await applyClusterBoost({
+      priority: basePriority,
+      category,
+      district: userDoc?.district,
+    });
+    const finalPriority = clusterResult.priority;
 
     // Duplicate Detection (scoped to same district)
     const duplicateResult = await checkDuplicate({
@@ -134,6 +148,34 @@ exports.createComplaint = async (req, res) => {
         assignedAdmin = districtAdmin._id;
       }
     }
+
+    // Auto-route to the real-world mediator (department contact) who
+    // handles this category in this district/taluk — e.g. the BESCOM
+    // electrical contact for an "Electricity Problem" in Devanahalli
+    // taluk. Falls through to assignedAdmin above if none is set up
+    // yet for this category/district combination.
+    const mediator = await assignMediator({
+      category,
+      district: userDoc?.district,
+      taluk: userDoc?.taluk,
+    });
+
+    const mediatorContact = mediator
+      ? {
+          name: mediator.name,
+          phone: mediator.phone,
+          department: mediator.department,
+        }
+      : { name: null, phone: null, department: null };
+
+    // Auto-route to the logged-in Department account (District Admin ->
+    // Department -> Worker chain). Independent of the mediator SMS
+    // contact above — falls through to assignedAdmin if no department
+    // account has been set up yet for this category in this district.
+    const department = await assignDepartment({
+      category,
+      district: userDoc?.district,
+    });
 
     // Create Complaint
     const complaint = await Complaint.create({
@@ -159,6 +201,14 @@ exports.createComplaint = async (req, res) => {
 
       assignedAdmin,
 
+      assignedMediator: mediator ? mediator._id : null,
+      mediatorContact,
+
+      assignedDepartment: department ? department._id : null,
+      departmentAssignedAt: department ? new Date() : null,
+
+      priorityBoostedByCluster: clusterResult.boosted,
+
       isDuplicate: duplicateResult.isDuplicate || false,
 
       duplicateOf:
@@ -171,7 +221,9 @@ exports.createComplaint = async (req, res) => {
         {
           status: 'Pending',
           changedBy: req.user.id,
-          note: 'Complaint submitted',
+          note: clusterResult.boosted
+            ? `Complaint submitted. Priority raised to ${finalPriority} — ${clusterResult.clusterCount} similar ${category} reports already open in ${userDoc?.district || 'this district'}.`
+            : 'Complaint submitted',
         },
       ],
     });
@@ -180,6 +232,14 @@ exports.createComplaint = async (req, res) => {
     await User.findByIdAndUpdate(req.user.id, {
       $inc: { totalComplaints: 1 },
     });
+
+    // Track mediator workload (used to pick the least-busy mediator
+    // next time two of them cover the same category/jurisdiction).
+    if (mediator) {
+      await Mediator.findByIdAndUpdate(mediator._id, {
+        $inc: { activeAssignments: 1 },
+      });
+    }
 
     await complaint.populate(
       'user',
@@ -206,6 +266,31 @@ ${complaint.trackingId}
       ).catch(console.error);
     }
 
+    // SMS the mediator directly — this is the actual routing: the
+    // department contact gets the tracking ID, category, the
+    // citizen's own phone number (so they can call back for details,
+    // same as the college ERP electrical-department example), and a
+    // link to the photo if one was uploaded.
+    if (mediator?.phone) {
+      const imageUrl = image
+        ? `${process.env.APP_BASE_URL || ''}${image}`
+        : null;
+
+      const mediatorMessage = `
+New ${category} complaint (${complaint.trackingId}) in ${userDoc?.village || userDoc?.district || 'your area'}.
+
+Citizen: ${userDoc?.name || 'N/A'}
+Phone: ${userDoc?.mobile || 'N/A'}
+Details: ${title}
+${imageUrl ? `Photo: ${imageUrl}` : ''}
+
+Please contact the citizen directly to resolve.
+- Smart Village
+      `;
+
+      await sendSMS(mediator.phone, mediatorMessage).catch(console.error);
+    }
+
     // Notify admins — only the district admin(s) for this complaint's own
     // district, plus superadmins (who oversee all districts). Previously
     // this notified every admin statewide regardless of district, which
@@ -230,6 +315,17 @@ ${complaint.trackingId}
       await Notification.insertMany(notifications);
     }
 
+    // Notify the owning Department account, same as admins above.
+    if (department) {
+      await Notification.create({
+        recipient: department._id,
+        type: 'new_complaint',
+        title: 'New Complaint Assigned to Your Department',
+        message: `New ${category} complaint: "${title}"`,
+        complaint: complaint._id,
+      });
+    }
+
     // Socket.IO
     const io = getIO();
 
@@ -244,6 +340,13 @@ ${complaint.trackingId}
       complaint,
       geoTagExtracted: geoTagged,
       autoPriority: finalPriority,
+      priorityBoostedByCluster: clusterResult.boosted,
+      mediatorAssigned: mediator
+        ? { department: mediator.department, name: mediator.name }
+        : null,
+      departmentAssigned: department
+        ? { id: department._id, category: department.departmentCategory }
+        : null,
       duplicateWarning:
         duplicateResult.isDuplicate
           ? 'Similar complaint already exists'
@@ -386,6 +489,12 @@ exports.getComplaint = async (req, res) => {
     ).populate(
       'user',
       'name email village'
+    ).populate(
+      'assignedWorkers.worker',
+      'name'
+    ).populate(
+      'assignedDepartment',
+      'name departmentCategory'
     );
 
     if (!complaint) {
@@ -507,5 +616,110 @@ exports.rateComplaint = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Failed to submit rating' });
+  }
+};
+
+// ── @desc    Citizen confirms a resolution, or reopens it ───────────────────
+// ── @route   PUT /api/complaints/:id/confirm ────────────────────────────────
+// Separate from rating — this is a binary "was it actually fixed?" that
+// can send the complaint back into the workflow. Only allowed once per
+// resolution (citizenConfirmation.confirmed must still be null); a fresh
+// resolution after rework resets it in adminController.verifyWork.
+exports.confirmResolution = async (req, res) => {
+  try {
+    const { confirmed, note } = req.body;
+
+    if (typeof confirmed !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: '"confirmed" (true/false) is required',
+      });
+    }
+
+    const complaint = await Complaint.findById(req.params.id)
+      .populate('assignedWorkers.worker', 'mobile name')
+      .populate('assignedMediator', 'phone name');
+
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+
+    if (complaint.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only respond to your own complaints',
+      });
+    }
+
+    if (complaint.status !== 'Resolved') {
+      return res.status(400).json({
+        success: false,
+        message: 'This complaint is not marked resolved yet',
+      });
+    }
+
+    if (complaint.citizenConfirmation?.confirmed !== null) {
+      return res.status(400).json({
+        success: false,
+        message: 'You already responded to this resolution',
+      });
+    }
+
+    complaint.citizenConfirmation = {
+      confirmed,
+      respondedAt: new Date(),
+      note: note || null,
+    };
+
+    if (confirmed) {
+      // Stays 'Resolved' — that IS the closed state here, no separate
+      // status value added.
+      complaint.statusHistory.push({
+        status: 'Resolved',
+        changedBy: req.user.id,
+        note: 'Citizen confirmed the issue was resolved',
+      });
+    } else {
+      complaint.status = 'In Progress';
+      complaint.resolvedAt = null;
+      complaint.reopenCount = (complaint.reopenCount || 0) + 1;
+
+      // Send it back to whoever needs to redo it. If workers were
+      // assigned, put the whole team back to 'Working' so their
+      // dashboards show the before/after upload step again.
+      if (complaint.assignedWorkers?.length > 0) {
+        complaint.assignedWorkers.forEach((w) => { w.stage = 'Working'; });
+        complaint.syncWorkerRollup();
+      }
+
+      complaint.statusHistory.push({
+        status: 'In Progress',
+        changedBy: req.user.id,
+        note: note ? `Reopened by citizen: ${note}` : 'Reopened by citizen — issue not resolved',
+      });
+
+      const reopenMsg =
+        `SmartVillage: Complaint ${complaint.trackingId} was REOPENED by the citizen — the issue is not fixed.` +
+        (note ? ` Reason: ${note}` : '');
+
+      if (complaint.assignedWorkers?.length > 0) {
+        for (const w of complaint.assignedWorkers) {
+          if (w.worker?.mobile) await sendSMS(w.worker.mobile, reopenMsg).catch(console.error);
+        }
+      } else if (complaint.assignedMediator?.phone) {
+        await sendSMS(complaint.assignedMediator.phone, reopenMsg).catch(console.error);
+      }
+    }
+
+    await complaint.save();
+
+    res.json({
+      success: true,
+      message: confirmed ? 'Thanks for confirming!' : 'Complaint reopened',
+      complaint,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Failed to submit response' });
   }
 };

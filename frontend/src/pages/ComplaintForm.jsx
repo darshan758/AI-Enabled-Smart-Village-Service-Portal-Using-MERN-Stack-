@@ -19,6 +19,8 @@ import { CATEGORIES, PRIORITY_LIST } from '../utils/helpers';
 import { Upload, MapPin, X, Send, AlertTriangle, Crosshair } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import VoiceInput from '../features/schemes/components/VoiceInput';
+import { suggestCategoryFromText } from '../utils/kannadaKeywords';
 
 export default function ComplaintForm() {
   const navigate = useNavigate();
@@ -51,6 +53,20 @@ export default function ComplaintForm() {
   };
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  // Fed by <VoiceInput>. Purely additive — just fills the description
+  // field the citizen would otherwise type into, and suggests (never
+  // forces) a category if one hasn't been picked yet.
+  const handleVoiceTranscript = (transcript, isFinal) => {
+    setForm((prev) => ({ ...prev, description: transcript }));
+    if (isFinal && !form.category) {
+      const suggested = suggestCategoryFromText(transcript);
+      if (suggested) {
+        setForm((prev) => ({ ...prev, category: suggested }));
+        toast.success(`Category suggested from what you said: "${suggested}" — change it above if that's wrong.`);
+      }
+    }
+  };
 
   const handleImage = (e) => {
     const file = e.target.files[0];
@@ -219,7 +235,10 @@ export default function ComplaintForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description *</label>
+                <VoiceInput lang="kn-IN" onTranscript={handleVoiceTranscript} />
+              </div>
               <textarea name="description" value={form.description} onChange={handleChange}
                 className={`${inputCls} resize-none`} rows={4}
                 placeholder="Describe the issue in detail…" maxLength={1000} />

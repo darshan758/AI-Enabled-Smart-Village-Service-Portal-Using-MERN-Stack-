@@ -1,4 +1,4 @@
-const { documentNamesMatch } = require('../utils/normalize');
+const { documentNamesMatch, nameFoundInText } = require('../utils/normalize');
 
 const NAME_MATCH_THRESHOLD = parseFloat(process.env.NAME_MATCH_THRESHOLD || '0.82');
 
@@ -89,7 +89,7 @@ function evaluateFormCriteria(scheme, formData) {
  * - education (from Education Certificate, if required) is in educationEligibility
  * - cross-document name matching among all documents that requiresNameMatch
  */
-function evaluateDocumentCriteria(scheme, documentResultsByType) {
+function evaluateDocumentCriteria(scheme, documentResultsByType, formData = {}) {
   const reasons = [];
   const failedCriteria = [];
   const verifiedDocuments = [];
@@ -176,12 +176,38 @@ function evaluateDocumentCriteria(scheme, documentResultsByType) {
     .map((type) => ({ type, result: documentResultsByType[type] }))
     .filter((d) => d.result && d.result.verified);
 
-  if (namedDocs.length >= 2) {
+  const applicantName = String((formData && formData.fullName) || '').trim();
+
+  if (applicantName) {
+    // PRIMARY path: every name-bearing document is checked against the name the
+    // applicant typed. A document passes if the name we managed to extract from it
+    // matches, OR (fallback, for multi-column / Kannada / garbled OCR) the typed
+    // name is found anywhere in the document text. This no longer depends on
+    // perfectly *extracting* a name from every document.
+    for (const doc of namedDocs) {
+      const label = labelFor(scheme, doc.type);
+      const extracted = doc.result.extractedName;
+      let ok = false;
+      if (extracted && documentNamesMatch(applicantName, extracted, NAME_MATCH_THRESHOLD).match) ok = true;
+      if (!ok && nameFoundInText(applicantName, doc.result.rawText).found) ok = true;
+      if (!ok) {
+        failedCriteria.push(`name_mismatch:${doc.type}`);
+        reasons.push(
+          extracted
+            ? `The name on your ${label} ("${extracted}") does not match the name you entered ("${applicantName}").`
+            : `We could not find the name "${applicantName}" on your ${label}. Check the spelling, or upload a clearer copy.`
+        );
+      }
+    }
+  } else if (namedDocs.length >= 2) {
+    // Legacy path (no name typed): compare documents against each other.
     const reference = namedDocs.find((d) => d.result.extractedName) || namedDocs[0];
 
     for (const doc of namedDocs) {
       if (doc.type === reference.type) continue;
       if (!doc.result.extractedName || !reference.result.extractedName) {
+        // one side unreadable: try to find the reference name in this document's text
+        if (reference.result.extractedName && nameFoundInText(reference.result.extractedName, doc.result.rawText).found) continue;
         failedCriteria.push(`name_extraction:${doc.type}`);
         reasons.push(`Could not extract the name from the ${labelFor(scheme, doc.type)}.`);
         continue;
@@ -214,12 +240,17 @@ function labelFor(scheme, type) {
  */
 function evaluateEligibility(scheme, formData, documentResultsByType) {
   const formResult = evaluateFormCriteria(scheme, formData);
-  const docResult = evaluateDocumentCriteria(scheme, documentResultsByType);
+  const docResult = evaluateDocumentCriteria(scheme, documentResultsByType, formData);
 
   const reasons = [...formResult.reasons, ...docResult.reasons];
   const failedCriteria = [...formResult.failedCriteria, ...docResult.failedCriteria];
 
-  const anyDocVerificationFailed = failedCriteria.some((f) => f.startsWith('document:'));
+  // Anything that means "we could not read/verify your documents" (unreadable,
+  // expired, name not extractable, names differ) is a VERIFICATION problem the
+  // applicant can fix by re-uploading — not a real eligibility rejection.
+  const anyDocVerificationFailed = failedCriteria.some(
+    (f) => f.startsWith('document:') || f.startsWith('name_') || f.endsWith('_extraction')
+  );
   const eligible = reasons.length === 0;
 
   let status = 'ELIGIBLE';

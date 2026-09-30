@@ -1,51 +1,44 @@
-const { verifyRequiredDocument } = require('../documentEngine');
+const { verifyRequiredDocument, matchesKeyword } = require('../documentEngine');
 
 const EDUCATION_CERT_INDICATORS = [
-  ['certificate', 'marksheet', 'mark sheet', 'transcript', 'diploma certificate', 'degree certificate'],
-  ['board', 'university', 'institute', 'college', 'school'],
+  [
+    'certificate', 'marksheet', 'mark sheet', 'marks card', 'statement of marks', 'transcript',
+    'sslc', 'puc', 'pre-university', 'ಅಂಕಪಟ್ಟಿ', 'ಪ್ರಮಾಣ ಪತ್ರ',
+  ],
+  ['board', 'university', 'institute', 'college', 'school', 'ಮಂಡಳಿ', 'ವಿಶ್ವವಿದ್ಯಾಲಯ', 'ಕಾಲೇಜು', 'ಶಾಲೆ'],
 ];
 
-// Canonical education levels this project recognizes, and the OCR/real-world
-// phrasings that justifiably map to each. Only add a mapping here when the
-// justification is logical/unambiguous — do not guess.
+// Canonical education levels and the real-world phrasings that map to each.
+// Matching is on WORD BOUNDARIES (see matchesKeyword) — the old substring
+// matching fired on ordinary words ("to be ", "ba ", "ma "). Only add a
+// mapping when it is unambiguous. Karnataka: PUC = Pre-University Course
+// (I PUC = Class 11, II PUC = Class 12).
 const EDUCATION_LEVEL_MAP = [
-  { level: 'Class 11', patterns: ['class 11', '11th', 'class xi', 'higher secondary first year'] },
-  { level: 'Class 12', patterns: ['class 12', '12th', 'class xii', 'higher secondary', 'intermediate'] },
-  {
-    level: 'Diploma',
-    patterns: ['diploma', 'polytechnic'],
-  },
+  { level: 'Class 11', patterns: ['class 11', '11th', 'class xi', 'i puc', '1st puc', 'first puc', 'first year puc', 'higher secondary first year'] },
+  { level: 'Class 12', patterns: ['class 12', '12th', 'class xii', 'ii puc', '2nd puc', 'second puc', 'second year puc', 'pre-university', 'pre university', 'higher secondary', 'intermediate'] },
+  { level: 'Diploma', patterns: ['diploma', 'polytechnic'] },
   {
     level: 'Undergraduate',
-    patterns: [
-      'b.tech', 'btech', 'b.e', 'be ', 'bachelor', "bachelor's", 'b.sc', 'bsc',
-      'b.a', 'ba ', 'b.com', 'bcom', 'undergraduate', 'ug degree',
-    ],
+    patterns: ['b.tech', 'btech', 'b.e', 'bachelor', "bachelor's", 'b.sc', 'bsc', 'b.a', 'b.com', 'bcom', 'undergraduate', 'ug degree'],
   },
   {
     level: 'Postgraduate',
-    patterns: [
-      'm.tech', 'mtech', 'm.e', 'master', "master's", 'm.sc', 'msc',
-      'm.a', 'ma ', 'm.com', 'mcom', 'postgraduate', 'pg degree', 'mba',
-    ],
+    patterns: ['m.tech', 'mtech', 'm.e', 'master', "master's", 'm.sc', 'msc', 'm.a', 'm.com', 'mcom', 'postgraduate', 'pg degree', 'mba'],
   },
 ];
 
 /**
  * extractEducationLevel()
- * Returns the canonical level string (matching the scheme's
- * educationEligibility values) or null if nothing confidently matched.
- * Checks more-specific/longer patterns implicitly by scanning all
- * levels and preferring the one with the longest matched pattern.
+ * Returns the canonical level (matching the scheme's educationEligibility
+ * values) or null. Prefers the level whose matched pattern is longest.
  */
 function extractEducationLevel(text) {
-  const lower = text.toLowerCase();
   let best = null;
   let bestPatternLength = 0;
 
   for (const { level, patterns } of EDUCATION_LEVEL_MAP) {
     for (const pattern of patterns) {
-      if (lower.includes(pattern) && pattern.length > bestPatternLength) {
+      if (pattern.length > bestPatternLength && matchesKeyword(text, pattern)) {
         best = level;
         bestPatternLength = pattern.length;
       }

@@ -83,8 +83,52 @@ const userSchema = new mongoose.Schema(
     // Roles
     role: {
       type: String,
-      enum: ['user', 'admin', 'superadmin'],
+      enum: ['user', 'admin', 'superadmin', 'worker', 'department'],
       default: 'user',
+    },
+
+    // ── Department profile fields (only relevant when role === 'department') ──
+    // A Department account is created by a District Admin. It represents a
+    // real department (e.g. "Electricity Department") that handles ONE
+    // complaint category within ONE district. Complaints of that category
+    // in that district are auto-routed to this account; the department
+    // then creates its own Worker accounts and assigns jobs to them.
+    departmentCategory: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+
+    // ── Worker profile fields (only relevant when role === 'worker') ───────
+    // Lets a Supervisor (district Admin, or the Department that owns this
+    // worker) filter "who can handle this complaint's category in this
+    // district" when assigning. Mirrors the shape of
+    // Mediator.categories/department, but for a real logged-in field
+    // worker rather than a notify-only contact.
+    workerDepartment: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+
+    // The Department account (User with role 'department') this worker
+    // was created under, if any. Workers created directly by a District
+    // Admin (no department layer set up yet for that category) leave
+    // this null and are assignable by the admin directly.
+    workerDepartmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+
+    workerCategories: {
+      type: [String],
+      default: [],
+    },
+
+    workerIsAvailable: {
+      type: Boolean,
+      default: true,
     },
 
     // Village-scoped admin
@@ -132,6 +176,10 @@ userSchema.pre('save', async function (next) {
         this.userId = `SV${year}-SUPER-${String(count + 1).padStart(3, '0')}`;
       } else if (this.role === 'admin') {
         this.userId = `SV${year}-ADMIN-${String(count + 1).padStart(3, '0')}`;
+      } else if (this.role === 'worker') {
+        this.userId = `SV${year}-WORKER-${String(count + 1).padStart(3, '0')}`;
+      } else if (this.role === 'department') {
+        this.userId = `SV${year}-DEPT-${String(count + 1).padStart(3, '0')}`;
       } else {
         this.userId = `SV${year}-USER-${1000 + count + 1}`;
       }

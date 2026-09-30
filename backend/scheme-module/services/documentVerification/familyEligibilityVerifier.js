@@ -11,16 +11,23 @@ const { verifyRequiredDocument } = require('../documentEngine');
  * income threshold as fact. See README "Assumptions" section.
  */
 const FAMILY_DOC_INDICATORS = [
-  ['ration card', 'secc', 'socio economic caste census', 'bpl card', 'family id', 'income certificate'],
-  ['family', 'household', 'members'],
+  [
+    'ration card', 'secc', 'socio economic caste census', 'bpl card', 'family id', 'income certificate',
+    // Kannada: income (ಆದಾಯ), ration card (ಪಡಿತರ ಚೀಟಿ), BPL, Nadakacheri certificate site
+    'ಆದಾಯ', 'ಪಡಿತರ', 'ಬಿಪಿಎಲ್', 'nadakacheri',
+  ],
+  ['family', 'household', 'members', 'ಕುಟುಂಬ'],
 ];
 
 async function verifyFamilyEligibilityDocument(filePath) {
   return verifyRequiredDocument(filePath, {
     indicatorGroups: FAMILY_DOC_INDICATORS,
     minGroupsMatched: 1,
-    nameLabels: ['head of family', 'name', 'applicant name'],
+    nameLabels: ['head of family', 'name', 'applicant name'], // Kannada certificates handled by the engine (ಬಿನ್ pattern)
     nameExcludeLabels: ['issuing authority', 'officer'],
+    // Income certificates expire; ration cards / SECC extracts do not. The engine
+    // applies the expiry check only when the document looks like a dated certificate.
+    validityCheck: true,
     wrongTypeMessage:
       'The uploaded document does not appear to be a valid family/income eligibility document.',
   });

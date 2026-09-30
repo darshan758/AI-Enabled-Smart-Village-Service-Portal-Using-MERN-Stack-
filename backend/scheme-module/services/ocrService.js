@@ -15,6 +15,15 @@ async function preprocessImage(inputPath) {
   if (image.bitmap.width < 1000) {
     const scale = 1000 / image.bitmap.width;
     image.scale(scale, Jimp.RESIZE_BICUBIC);
+  } else if (image.bitmap.width > 1800) {
+    // Downscale large phone-camera photos (often 3000-4000px wide).
+    // Tesseract's recognition time grows with pixel count, so an
+    // un-downscaled 4000px photo can take 10s+ on its own — feeding
+    // it more pixels than OCR needs just makes every check slower
+    // without improving accuracy. 1800px is comfortably enough
+    // resolution for document text.
+    const scale = 1800 / image.bitmap.width;
+    image.scale(scale, Jimp.RESIZE_BICUBIC);
   }
 
   image
@@ -31,13 +40,98 @@ async function preprocessImage(inputPath) {
  * Returns { text, confidence } where confidence is Tesseract's
  * mean word confidence (0-100).
  */
-async function runOcr(imageBuffer, lang = 'eng') {
-  const {
-    data: { text, confidence },
-  } = await Tesseract.recognize(imageBuffer, lang, {
-    logger: () => {}, // swap for a real logger in development if needed
-  });
+// English + Kannada by default: Karnataka govt certificates (Nadakacheri
+// income/caste, etc.) are printed in Kannada. tesseract.js downloads
+// kan.traineddata automatically the first time (needs internet once).
+// For offline/locked-down servers, put eng.traineddata + kan.traineddata in a
+// folder and set TESSDATA_LANG_PATH to it.
+const DEFAULT_OCR_LANGS = process.env.OCR_LANGS || 'eng+kan';
+const OCR_WORKERS = Math.max(1, parseInt(process.env.OCR_WORKERS || '2', 10));
+
+function workerOptions() {
+  const options = { logger: () => {} };
+  if (process.env.TESSDATA_LANG_PATH) {
+    options.langPath = process.env.TESSDATA_LANG_PATH;
+    options.gzip = false;
+  }
+  return options;
+}
+
+// A small pool of long-lived OCR workers. Creating a worker (loading the
+// WASM engine + English/Kannada language data) costs several seconds, so
+// doing it on every call made each eligibility check slow enough to hit the
+// frontend timeout. Workers are created once (in the background as soon as
+// the server starts) and reused; two documents can be read in parallel.
+let schedulerPromise = null;
+function getScheduler() {
+  if (!schedulerPromise) {
+    schedulerPromise = (async () => {
+      const scheduler = Tesseract.createScheduler();
+      for (let i = 0; i < OCR_WORKERS; i += 1) {
+        // Sequential on purpose: the first worker downloads/caches the
+        // language data, later workers reuse it.
+        // eslint-disable-next-line no-await-in-loop
+        const worker = await Tesseract.createWorker(DEFAULT_OCR_LANGS, 1, workerOptions());
+        scheduler.addWorker(worker);
+      }
+      return scheduler;
+    })().catch((err) => {
+      schedulerPromise = null; // allow a retry on the next request
+      throw err;
+    });
+  }
+  return schedulerPromise;
+}
+
+/** Call once at startup so the first user request doesn't pay the load cost. */
+function warmUpOcr() {
+  return getScheduler().then(() => console.log('[OCR] workers ready (' + DEFAULT_OCR_LANGS + ')'));
+}
+
+async function runOcr(imageBuffer, lang = DEFAULT_OCR_LANGS) {
+  let result;
+  if (lang === DEFAULT_OCR_LANGS) {
+    const scheduler = await getScheduler();
+    result = await scheduler.addJob('recognize', imageBuffer);
+  } else {
+    result = await Tesseract.recognize(imageBuffer, lang, workerOptions());
+  }
+  const { data: { text, confidence } } = result;
   return { text: text || '', confidence: confidence || 0 };
+}
+
+// ── Sparse-text OCR (page segmentation mode 11) ─────────────────────────
+// Multi-column documents (e.g. the 3-panel Aadhaar letter with Kannada + English
+// side by side) get their columns interleaved by normal OCR, garbling small
+// text such as the name. Sparse mode + a big upscale reads each text blob on
+// its own line. Only used as a fallback, so it is created lazily.
+let sparseWorkerPromise = null;
+let sparseChain = Promise.resolve();
+function getSparseWorker() {
+  if (!sparseWorkerPromise) {
+    sparseWorkerPromise = (async () => {
+      const worker = await Tesseract.createWorker(DEFAULT_OCR_LANGS, 1, workerOptions());
+      await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT });
+      return worker;
+    })().catch((err) => { sparseWorkerPromise = null; throw err; });
+  }
+  return sparseWorkerPromise;
+}
+
+async function ocrImageFileSparse(filePath) {
+  const image = await Jimp.read(filePath);
+  if (image.bitmap.width < 2400) image.scale(2400 / image.bitmap.width, Jimp.RESIZE_BICUBIC);
+  image.grayscale();
+  const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
+
+  // one job at a time on the single sparse worker
+  const job = sparseChain.then(async () => {
+    const worker = await getSparseWorker();
+    return worker.recognize(buffer);
+  });
+  sparseChain = job.catch(() => {});
+  const { data: { text, confidence } } = await job;
+  return { text: (text || '').trim(), confidence: confidence || 0, readable: (text || '').trim().length >= MIN_READABLE_CHARS };
 }
 
 /**
@@ -94,7 +188,15 @@ async function targetedOcr(filePath, region) {
   };
 }
 
+// Start loading OCR workers in the background as soon as this module loads
+// (i.e. when the server boots). Failures are logged, not fatal.
+if (process.env.OCR_WARMUP !== 'false') {
+  warmUpOcr().catch((e) => console.error('[OCR] warm-up failed:', e.message));
+}
+
 module.exports = {
+  warmUpOcr,
+  ocrImageFileSparse,
   preprocessImage,
   runOcr,
   ocrImageFile,

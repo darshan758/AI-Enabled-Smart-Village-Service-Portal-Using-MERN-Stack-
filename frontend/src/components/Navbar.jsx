@@ -79,8 +79,9 @@ export default function Navbar({ darkMode, toggleDark }) {
   };
 
   const handleLogout = () => {
+    const isBackOffice = ['admin', 'superadmin', 'department'].includes(user?.role);
     logout();
-    navigate('/login');
+    navigate(isBackOffice ? '/admin/login' : '/login');
     toast.success('Logged out successfully');
   };
 
@@ -89,6 +90,10 @@ export default function Navbar({ darkMode, toggleDark }) {
       ? [{ to: '/admin/dashboard', label: 'Dashboard', icon: Home }]
       : user?.role === 'superadmin'
       ? [{ to: '/superadmin/dashboard', label: 'Dashboard', icon: Home }]
+      : user?.role === 'department'
+      ? [{ to: '/department/dashboard', label: 'Dashboard', icon: Home }]
+      : user?.role === 'worker'
+      ? [{ to: '/worker/dashboard', label: 'My Jobs', icon: Home }]
       : [
           { to: '/dashboard', label: 'Dashboard', icon: Home },
           { to: '/report', label: 'Report Issue', icon: FilePlus },
@@ -102,6 +107,10 @@ export default function Navbar({ darkMode, toggleDark }) {
       ? '/admin/dashboard'
       : user?.role === 'superadmin'
       ? '/superadmin/dashboard'
+      : user?.role === 'department'
+      ? '/department/dashboard'
+      : user?.role === 'worker'
+      ? '/worker/dashboard'
       : '/dashboard';
 
   const isActive = (path) => location.pathname === path;

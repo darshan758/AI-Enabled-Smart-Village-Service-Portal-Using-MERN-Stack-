@@ -25,6 +25,8 @@ import Register from './pages/Register';
 import UserDashboard from './pages/UserDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import WorkerDashboard from './pages/WorkerDashboard';
+import DepartmentDashboard from './pages/DepartmentDashboard';
 
 import ComplaintForm from './pages/ComplaintForm';
 import ComplaintTracking from './pages/ComplaintTracking';
@@ -43,6 +45,7 @@ import EligibilityCheckPage from './features/schemes/pages/EligibilityCheckPage'
 // Agricultural Market Price Checker (new native feature)
 import AgriLayout from './features/agri/AgriLayout';
 import MandiPricesPage from './features/agri/pages/MandiPricesPage';
+import AdvisoryPage from './features/agri/pages/AdvisoryPage';
 
 
 // ─────────────────────────────────────────────────────────────
@@ -80,6 +83,58 @@ const UserRoute = ({ children }) => {
   // Admins should not open citizen dashboard
   if (['admin', 'superadmin'].includes(user.role)) {
     return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  // Workers have their own dashboard, not the citizen one
+  if (user.role === 'worker') {
+    return <Navigate to="/worker/dashboard" replace />;
+  }
+
+  // Departments have their own dashboard, not the citizen one
+  if (user.role === 'department') {
+    return <Navigate to="/department/dashboard" replace />;
+  }
+
+  return children;
+};
+
+
+// Department Only
+const DepartmentRoute = ({ children }) => {
+
+  const { isAuthenticated, user, loading } = useAuth();
+
+  if (loading || (isAuthenticated && !user)) {
+    return <LoadingSpinner fullPage />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  if (user.role !== 'department') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+
+// Worker Only
+const WorkerRoute = ({ children }) => {
+
+  const { isAuthenticated, user, loading } = useAuth();
+
+  if (loading || (isAuthenticated && !user)) {
+    return <LoadingSpinner fullPage />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role !== 'worker') {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -148,6 +203,14 @@ const PublicRoute = ({ children }) => {
       return <Navigate to="/admin/dashboard" replace />;
     }
 
+    if (user.role === 'worker') {
+      return <Navigate to="/worker/dashboard" replace />;
+    }
+
+    if (user.role === 'department') {
+      return <Navigate to="/department/dashboard" replace />;
+    }
+
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -191,8 +254,12 @@ export default function App() {
             </Route>
 
             {/* Agricultural Market Price Checker — public, no login required */}
+            <Route path="/advisory" element={<Navigate to="/agri/advisory" replace />} />
+            <Route path="/farmer-advisory" element={<Navigate to="/agri/advisory" replace />} />
             <Route path="/agri" element={<AgriLayout />}>
               <Route index element={<MandiPricesPage />} />
+              <Route path="advisory" element={<AdvisoryPage />} />
+              <Route path="farmer-advisory" element={<Navigate to="/agri/advisory" replace />} />
             </Route>
 
             <Route
@@ -249,6 +316,28 @@ export default function App() {
                 <UserRoute>
                   <ComplaintMap />
                 </UserRoute>
+              }
+            />
+
+
+            {/* Worker Routes */}
+            <Route
+              path="/worker/dashboard"
+              element={
+                <WorkerRoute>
+                  <WorkerDashboard />
+                </WorkerRoute>
+              }
+            />
+
+
+            {/* Department Routes */}
+            <Route
+              path="/department/dashboard"
+              element={
+                <DepartmentRoute>
+                  <DepartmentDashboard />
+                </DepartmentRoute>
               }
             />
 
