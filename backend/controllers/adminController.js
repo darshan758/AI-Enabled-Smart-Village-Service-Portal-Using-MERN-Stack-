@@ -21,17 +21,20 @@ const getDashboardStats = async (req, res, next) => {
   try {
     // District-scoped admins see only their district
     const scopeFilter = req.districtFilter || {};
+    // Complaint queries exclude complaints filed automatically by the SLA agent, so they
+    // never inflate totals/charts. (scopeFilter itself is still used for the User count.)
+    const cScope = { ...scopeFilter, source: { $ne: 'agent' } };
 
     const [total, pending, inProgress, resolved, rejected] = await Promise.all([
-      Complaint.countDocuments(scopeFilter),
-      Complaint.countDocuments({ ...scopeFilter, status: 'Pending' }),
-      Complaint.countDocuments({ ...scopeFilter, status: 'In Progress' }),
-      Complaint.countDocuments({ ...scopeFilter, status: 'Resolved' }),
-      Complaint.countDocuments({ ...scopeFilter, status: 'Rejected' }),
+      Complaint.countDocuments(cScope),
+      Complaint.countDocuments({ ...cScope, status: 'Pending' }),
+      Complaint.countDocuments({ ...cScope, status: 'In Progress' }),
+      Complaint.countDocuments({ ...cScope, status: 'Resolved' }),
+      Complaint.countDocuments({ ...cScope, status: 'Rejected' }),
     ]);
 
     const categoryStats = await Complaint.aggregate([
-      { $match: scopeFilter },
+      { $match: cScope },
       { $group: { _id: '$category', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
@@ -39,25 +42,25 @@ const getDashboardStats = async (req, res, next) => {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     const monthlyTrend = await Complaint.aggregate([
-      { $match: { ...scopeFilter, createdAt: { $gte: sixMonthsAgo } } },
+      { $match: { ...cScope, createdAt: { $gte: sixMonthsAgo } } },
       { $group: { _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } }, count: { $sum: 1 } } },
       { $sort: { '_id.year': 1, '_id.month': 1 } },
     ]);
 
     const priorityStats = await Complaint.aggregate([
-      { $match: scopeFilter },
+      { $match: cScope },
       { $group: { _id: '$priority', count: { $sum: 1 } } },
     ]);
 
     const districtStats = await Complaint.aggregate([
-      { $match: { ...scopeFilter, district: { $ne: null, $ne: '' } } },
+      { $match: { ...cScope, district: { $ne: null, $ne: '' } } },
       { $group: { _id: '$district', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 31 },
     ]);
 
     const totalUsers       = await User.countDocuments({ role: 'user', ...scopeFilter });
-    const recentComplaints = await Complaint.find(scopeFilter)
+    const recentComplaints = await Complaint.find(cScope)
       .sort({ createdAt: -1 })
       .limit(5)
       .populate('user', 'name district phone');

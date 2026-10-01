@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-
-// Leaflet is loaded via CDN in index.html
-// This component works with window.L
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const STATUS_ICON_COLOR = {
   Pending: '#f59e0b',
@@ -26,16 +25,6 @@ export default function MapComponent({
   const markersRef = useRef([]);
 
   useEffect(() => {
-    // Wait for Leaflet to be available
-    if (typeof window === 'undefined' || !window.L) {
-      const interval = setInterval(() => {
-        if (window.L) {
-          clearInterval(interval);
-          initMap();
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
     initMap();
 
     return () => {
@@ -48,7 +37,6 @@ export default function MapComponent({
 
   const initMap = () => {
     if (!mapRef.current || mapInstanceRef.current) return;
-    const L = window.L;
 
     const map = L.map(mapRef.current).setView(center, zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -77,7 +65,6 @@ export default function MapComponent({
   };
 
   const placeSelectMarker = (lat, lng) => {
-    const L = window.L;
     const map = mapInstanceRef.current;
     if (!map) return;
 
@@ -97,16 +84,15 @@ export default function MapComponent({
   };
 
   const addMarkers = (complaints) => {
-    const L = window.L;
     const map = mapInstanceRef.current;
-    if (!map || !L) return;
+    if (!map) return;
 
     // Remove old markers
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
     complaints.forEach((c) => {
-      if (!c.latitude || !c.longitude) return;
+      if (c.latitude == null || c.longitude == null) return;
       const color = STATUS_ICON_COLOR[c.status] || '#6b7280';
 
       const icon = L.divIcon({

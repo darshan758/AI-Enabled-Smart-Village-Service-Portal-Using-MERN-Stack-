@@ -26,6 +26,8 @@ const {
   uploadResolutionPhoto,
   exportComplaintsCSV,
 } = require('../controllers/adminController');
+const { adminMap } = require('../controllers/liveMapController');
+const { adminPerformance, agentActions, runAgent } = require('../controllers/performanceController');
 const { protect, adminOnly, districtScoped } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
@@ -34,6 +36,10 @@ const router = express.Router();
 router.use(protect, adminOnly, districtScoped);
 
 router.get('/stats',                         getDashboardStats);
+router.get('/map/complaints',                adminMap);        // live map data
+router.get('/performance',                   adminPerformance); // department performance + response times
+router.get('/agent/actions',                 agentActions);    // complaints the SLA agent filed
+router.post('/agent/run',                    runAgent);        // run the agent now ({ dryRun })
 router.get('/complaints',                    getAllComplaints);
 router.get('/complaints/export',             exportComplaintsCSV);
 router.put('/complaints/:id/status',         updateComplaintStatus);

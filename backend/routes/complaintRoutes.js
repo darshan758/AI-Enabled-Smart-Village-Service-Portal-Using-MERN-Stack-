@@ -9,10 +9,11 @@ const {
   getComplaintLocations,
   rateComplaint,
   confirmResolution,
+  getVoiceNote,
 } = require('../controllers/complaintController');
 
 const { protect } = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware');
+const { complaintUpload } = require('../middleware/complaintUpload');
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.get('/check-duplicate', checkDuplicateEndpoint);
 // create complaint
 router.post(
   '/',
-  upload.single('image'),
+  complaintUpload, // image + optional voice note
   createComplaint
 );
 
@@ -40,6 +41,9 @@ router.get(
   '/locations',
   getComplaintLocations
 );
+
+// voice note (access-checked stream; file is not publicly served)
+router.get('/:id/voice', getVoiceNote);
 
 // single complaint
 router.get('/:id', getComplaint);

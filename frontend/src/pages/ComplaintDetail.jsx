@@ -9,6 +9,7 @@ import {
 } from '../utils/helpers';
 import { ArrowLeft, MapPin, Clock, Hash, User, Tag, Star, CheckCircle2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+import VoicePlayer from '../components/VoicePlayer';
 
 export default function ComplaintDetail() {
   const { id } = useParams();
@@ -166,6 +167,11 @@ export default function ComplaintDetail() {
           <div className="mt-5">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Description</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap">{description}</p>
+            {complaint.voiceNote?.file && (
+              <div className="mt-3">
+                <VoicePlayer complaintId={complaint._id} durationSec={complaint.voiceNote.durationSec} />
+              </div>
+            )}
           </div>
 
           {/* Admin note */}

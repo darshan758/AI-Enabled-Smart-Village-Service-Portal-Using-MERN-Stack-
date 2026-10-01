@@ -8,6 +8,9 @@ import React, {
 import Navbar from '../components/Navbar';
 import StatsCard from '../components/StatsCard';
 import LoadingSpinner from '../components/LoadingSpinner';
+import LiveComplaintMap from '../components/LiveComplaintMap';
+import PerformancePanel from '../components/PerformancePanel';
+import VoicePlayer from '../components/VoicePlayer';
 
 import api from '../utils/api';
 
@@ -44,6 +47,7 @@ import {
   Trash2,
   BarChart2,
   MapPin,
+  Gauge,
   Camera,
   Download,
   Printer,
@@ -65,6 +69,8 @@ const TABS = [
   { id: 'complaints', label: 'Complaints', icon: FileText },
   { id: 'departments', label: 'Departments', icon: Building2 },
   { id: 'users', label: 'Users', icon: Users },
+  { id: 'map', label: 'Live Map', icon: MapPin },
+  { id: 'performance', label: 'Performance', icon: Gauge },
 ];
 
 
@@ -826,6 +832,12 @@ export default function AdminDashboard() {
         </div>
 
 
+        {/* LIVE MAP — every complaint with a location, updating in real time */}
+        {tab === 'map' && <LiveComplaintMap endpoint="/admin/map/complaints" />}
+
+        {/* PERFORMANCE — department response times, SLA breaches, SLA agent */}
+        {tab === 'performance' && <PerformancePanel mode="admin" />}
+
         {/* OVERVIEW */}
         {tab === 'overview' &&
           stats && (
@@ -1090,6 +1102,12 @@ export default function AdminDashboard() {
                             <p className="text-xs text-gray-400">
                               {c.user?.name}
                             </p>
+
+                            {c.voiceNote?.file && (
+                              <div className="mt-1">
+                                <VoicePlayer complaintId={c._id} durationSec={c.voiceNote.durationSec} />
+                              </div>
+                            )}
 
                           </td>
 

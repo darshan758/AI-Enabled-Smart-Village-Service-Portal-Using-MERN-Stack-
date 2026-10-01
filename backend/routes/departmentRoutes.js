@@ -18,6 +18,8 @@ const {
   verifyWork,
 } = require('../controllers/departmentController');
 
+const { departmentMap } = require('../controllers/liveMapController');
+const { departmentOwnPerformance } = require('../controllers/performanceController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -25,6 +27,8 @@ const router = express.Router();
 router.use(protect, authorize('department'));
 
 router.get('/stats', getDashboardStats);
+router.get('/map/complaints', departmentMap);          // only this department's complaints
+router.get('/performance', departmentOwnPerformance);  // this department's own metrics
 router.get('/complaints', getComplaints);
 router.post('/complaints/:id/assign-worker', assignWorker);
 router.delete('/complaints/:id/workers/:workerId', removeWorkerFromComplaint);

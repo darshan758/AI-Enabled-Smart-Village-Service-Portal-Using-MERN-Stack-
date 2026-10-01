@@ -12,6 +12,12 @@ const assignDepartment = require('../utils/departmentAssigner');
 const applyClusterBoost = require('../utils/clusterPriority');
 
 const { getIO } = require('../socket/socketHandler');
+const { emitComplaintEvent } = require('../utils/liveEvents');
+const { voiceDir, MAX_VOICE_BYTES, MAX_VOICE_SECONDS } = require('../middleware/complaintUpload');
+const path = require('path');
+const fs = require('fs');
+
+const removeFile = (f) => { if (f && f.path) fs.unlink(f.path, () => {}); };
 
 
 // ======================================================
@@ -65,6 +71,9 @@ exports.checkDuplicateEndpoint = async (req, res) => {
 
 exports.createComplaint = async (req, res) => {
 
+  let voiceFile = null;
+  let created = false;
+
   try {
 
     const {
@@ -82,12 +91,36 @@ exports.createComplaint = async (req, res) => {
     let lng = longitude ? parseFloat(longitude) : null;
     let geoTagged = false;
 
+    // Files arrive as req.files.{image,voice} (see middleware/complaintUpload.js)
+    const imageFile = req.files && req.files.image ? req.files.image[0] : null;
+    voiceFile = req.files && req.files.voice ? req.files.voice[0] : null;
+
+    // Optional voice note — validate before doing any other work.
+    let voiceNote = undefined;
+    if (voiceFile) {
+      if (voiceFile.size > MAX_VOICE_BYTES) {
+        removeFile(voiceFile);
+        removeFile(imageFile);
+        return res.status(400).json({
+          success: false,
+          message: `Voice note is too large (max ${MAX_VOICE_BYTES >= 1048576 ? (MAX_VOICE_BYTES / 1048576).toFixed(1).replace(/\.0$/, '') + ' MB' : Math.round(MAX_VOICE_BYTES / 1024) + ' KB'}).`,
+        });
+      }
+      const dur = Math.min(Math.max(Number(req.body.voiceDuration) || 0, 0), MAX_VOICE_SECONDS);
+      voiceNote = {
+        file: path.basename(voiceFile.path),
+        mimeType: String(voiceFile.mimetype).split(';')[0],
+        durationSec: dur || null,
+        sizeBytes: voiceFile.size,
+      };
+    }
+
     // Image Upload + EXIF Location
-    if (req.file) {
+    if (imageFile) {
 
-      image = `/uploads/${req.file.filename}`;
+      image = `/uploads/${imageFile.filename}`;
 
-      const geoData = await extractGeoTag(req.file.path);
+      const geoData = await extractGeoTag(imageFile.path);
 
       if (geoData) {
         lat = geoData.latitude;
@@ -215,6 +248,8 @@ exports.createComplaint = async (req, res) => {
         duplicateResult.duplicateOf || null,
 
 
+      voiceNote,
+
       status: 'Pending',
 
       statusHistory: [
@@ -227,6 +262,8 @@ exports.createComplaint = async (req, res) => {
         },
       ],
     });
+
+    created = true;
 
     // Increment user complaint count
     await User.findByIdAndUpdate(req.user.id, {
@@ -326,13 +363,11 @@ Please contact the citizen directly to resolve.
       });
     }
 
-    // Socket.IO
-    const io = getIO();
-
-    io.emit('new_complaint', {
-      message: `New complaint: ${title}`,
-      complaint,
-    });
+    // Socket.IO — live map. Sent ONLY to the rooms allowed to see this complaint
+    // (district admins, superadmins, the assigned department) and carries just the
+    // map fields. (This used to io.emit() the whole complaint, including the
+    // citizen's name/email, to every connected socket.)
+    emitComplaintEvent('new_complaint', complaint);
 
     res.status(201).json({
       success: true,
@@ -356,6 +391,9 @@ Please contact the citizen directly to resolve.
   } catch (err) {
 
     console.error('Create complaint error:', err);
+
+    // Don't leave an orphaned private voice file behind if the complaint was never saved.
+    if (!created) removeFile(voiceFile);
 
     res.status(500).json({
       success: false,
@@ -721,5 +759,48 @@ exports.confirmResolution = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Failed to submit response' });
+  }
+};
+
+
+// ======================================================
+// @desc    Stream a complaint's voice note
+// @route   GET /api/complaints/:id/voice
+// @access  Private — the citizen who filed it, the district admin (or any
+//          superadmin / district-less admin), or the assigned department.
+// The file lives outside the public /uploads folder, so this is the only way
+// to reach it.
+// ======================================================
+exports.getVoiceNote = async (req, res) => {
+  try {
+    const c = await Complaint.findById(req.params.id).select(
+      'user district assignedDepartment voiceNote'
+    );
+    if (!c || !c.voiceNote || !c.voiceNote.file) {
+      return res.status(404).json({ success: false, message: 'No voice note on this complaint.' });
+    }
+
+    const u = req.user;
+    const allowed =
+      String(c.user) === String(u._id) ||
+      u.role === 'superadmin' ||
+      (u.role === 'admin' && (!u.district || u.district === c.district)) ||
+      (u.role === 'department' && c.assignedDepartment && String(c.assignedDepartment) === String(u._id));
+    if (!allowed) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+
+    // Stored value is a bare file name; basename() guards against any tampering.
+    const filePath = path.join(voiceDir, path.basename(c.voiceNote.file));
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Voice file is no longer available.' });
+    }
+    res.setHeader('Content-Type', c.voiceNote.mimeType || 'audio/webm');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error('Voice note error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load voice note.' });
   }
 };

@@ -140,6 +140,18 @@ mongoose
       setTimeout(runAutoEscalation, 30 * 1000);
       setInterval(runAutoEscalation, 60 * 60 * 1000);
 
+      // ── SLA monitoring agent ───────────────────────────────────────────
+      // Files an escalation complaint automatically when a department
+      // breaches its SLA. Rule-based, no external AI service needed.
+      // Disable with AGENT_SLA_ENABLED=false; tune with AGENT_SLA_INTERVAL_MIN.
+      if (process.env.AGENT_SLA_ENABLED !== 'false') {
+        const { runSlaAgentSafe } = require('./utils/slaAgent');
+        const everyMs = (Number(process.env.AGENT_SLA_INTERVAL_MIN) || 30) * 60 * 1000;
+        setTimeout(runSlaAgentSafe, 60 * 1000);
+        setInterval(runSlaAgentSafe, everyMs);
+        console.log(`🤖 SLA agent scheduled every ${everyMs / 60000} min`);
+      }
+
     });
   })
   .catch((err) => {

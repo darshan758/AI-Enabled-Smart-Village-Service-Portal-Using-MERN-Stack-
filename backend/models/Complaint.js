@@ -416,6 +416,40 @@ const complaintSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // ── Optional voice note (citizen speaks instead of / as well as typing) ──
+    // Stored OUTSIDE the public /uploads folder (backend/private_uploads/voice)
+    // and streamed only through GET /api/complaints/:id/voice after an access
+    // check. `file` is a bare file name, never a path.
+    voiceNote: {
+      file: { type: String, default: null },
+      mimeType: { type: String, default: null },
+      durationSec: { type: Number, default: null },
+      sizeBytes: { type: Number, default: null },
+    },
+
+    // ── Agent-filed complaints (utils/slaAgent.js) ──────────────────────────
+    // 'citizen' = filed by a person; 'agent' = filed automatically by the SLA
+    // monitoring agent. Agent complaints are excluded from the live map and
+    // from department performance so they never count against anyone twice.
+    source: {
+      type: String,
+      enum: ['citizen', 'agent'],
+      default: 'citizen',
+    },
+
+    // For an agent escalation: the complaint that breached its SLA.
+    relatedComplaint: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Complaint',
+      default: null,
+    },
+
+    // Set once the agent has escalated THIS complaint (never escalated twice).
+    agentEscalatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -429,6 +463,7 @@ complaintSchema.index({ isDuplicate: 1 });
 complaintSchema.index({ createdAt: -1 });
 complaintSchema.index({ assignedWorker: 1, workerStage: 1 });
 complaintSchema.index({ assignedDepartment: 1, status: 1 });
+complaintSchema.index({ source: 1, agentEscalatedAt: 1, status: 1 });
 
 // Keeps the legacy single-worker fields (assignedWorker, workerStage,
 // workerAssignedAt) in sync with the new assignedWorkers team array,

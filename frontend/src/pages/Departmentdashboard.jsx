@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import LoadingSpinner from '../components/LoadingSpinner';
+import LiveComplaintMap from '../components/LiveComplaintMap';
+import PerformancePanel from '../components/PerformancePanel';
+import VoicePlayer from '../components/VoicePlayer';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -223,6 +226,8 @@ export default function DepartmentDashboard() {
           {[
             { id: 'complaints', label: 'Complaints' },
             { id: 'workers', label: 'Workers' },
+            { id: 'map', label: 'Live Map' },
+            { id: 'performance', label: 'Performance' },
           ].map((t) => (
             <button
               key={t.id}
@@ -237,6 +242,12 @@ export default function DepartmentDashboard() {
             </button>
           ))}
         </div>
+
+        {/* Live Map — only this department's complaints */}
+        {tab === 'map' && <LiveComplaintMap endpoint="/department/map/complaints" />}
+
+        {/* Performance — this department's own response times and SLA */}
+        {tab === 'performance' && <PerformancePanel mode="department" />}
 
         {/* Complaints Tab */}
         {tab === 'complaints' && (
@@ -279,6 +290,11 @@ export default function DepartmentDashboard() {
                       <p className="text-xs text-gray-400 mt-1">
                         {c.trackingId} · {c.user?.name} · {timeAgo(c.createdAt)}
                       </p>
+                      {c.voiceNote?.file && (
+                        <div className="mt-1.5">
+                          <VoicePlayer complaintId={c._id} durationSec={c.voiceNote.durationSec} />
+                        </div>
+                      )}
                       {c.user?.mobile && (
                         <a href={`tel:${c.user.mobile}`} className="inline-flex items-center gap-1 text-xs text-green-600 mt-1">
                           <Phone size={11} /> {c.user.mobile}

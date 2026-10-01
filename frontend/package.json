@@ -19,7 +19,7 @@
     "react-router-dom": "^6.30.3",
     "react-toastify": "^11.1.0",
     "recharts": "^2.10.1",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",

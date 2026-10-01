@@ -167,6 +167,16 @@ function evaluateDocumentCriteria(scheme, documentResultsByType, formData = {}) 
   }
 
   // 5. Cross-document name matching.
+  //
+  // Rules (a document must belong to the SAME person as the others):
+  //  a) A name we actually READ from a document is decisive. If it does not match the
+  //     typed name, the document fails — it is never "rescued" by searching its text.
+  //  b) Searching the text is only a fallback for documents whose name could not be read,
+  //     and it ignores relatives' names (S/O, D/O, W/O, father, mother, ಬಿನ್...).
+  //  c) Independently of the typed name, every pair of documents must carry matching names.
+  //
+  // `nameChecks` records HOW each document was accepted/rejected, so the result can explain
+  // itself instead of just saying "passed".
   const nameMatchTypes =
     scheme.nameMatchGroup && scheme.nameMatchGroup.length > 0
       ? scheme.nameMatchGroup
@@ -177,56 +187,85 @@ function evaluateDocumentCriteria(scheme, documentResultsByType, formData = {}) 
     .filter((d) => d.result && d.result.verified);
 
   const applicantName = String((formData && formData.fullName) || '').trim();
+  const nameChecks = [];
+  const failedNameDocs = new Set();
+  const failName = (type, reason) => {
+    failedNameDocs.add(type);
+    failedCriteria.push(`name_mismatch:${type}`);
+    reasons.push(reason);
+  };
 
+  // 5a. Every name-bearing document vs. the name the applicant typed.
   if (applicantName) {
-    // PRIMARY path: every name-bearing document is checked against the name the
-    // applicant typed. A document passes if the name we managed to extract from it
-    // matches, OR (fallback, for multi-column / Kannada / garbled OCR) the typed
-    // name is found anywhere in the document text. This no longer depends on
-    // perfectly *extracting* a name from every document.
     for (const doc of namedDocs) {
       const label = labelFor(scheme, doc.type);
-      const extracted = doc.result.extractedName;
-      let ok = false;
-      if (extracted && documentNamesMatch(applicantName, extracted, NAME_MATCH_THRESHOLD).match) ok = true;
-      if (!ok && nameFoundInText(applicantName, doc.result.rawText).found) ok = true;
-      if (!ok) {
-        failedCriteria.push(`name_mismatch:${doc.type}`);
-        reasons.push(
-          extracted
-            ? `The name on your ${label} ("${extracted}") does not match the name you entered ("${applicantName}").`
-            : `We could not find the name "${applicantName}" on your ${label}. Check the spelling, or upload a clearer copy.`
-        );
-      }
-    }
-  } else if (namedDocs.length >= 2) {
-    // Legacy path (no name typed): compare documents against each other.
-    const reference = namedDocs.find((d) => d.result.extractedName) || namedDocs[0];
+      const extracted = doc.result.extractedName || null;
 
-    for (const doc of namedDocs) {
-      if (doc.type === reference.type) continue;
-      if (!doc.result.extractedName || !reference.result.extractedName) {
-        // one side unreadable: try to find the reference name in this document's text
-        if (reference.result.extractedName && nameFoundInText(reference.result.extractedName, doc.result.rawText).found) continue;
-        failedCriteria.push(`name_extraction:${doc.type}`);
-        reasons.push(`Could not extract the name from the ${labelFor(scheme, doc.type)}.`);
-        continue;
-      }
-      const { match } = documentNamesMatch(
-        reference.result.extractedName,
-        doc.result.extractedName,
-        NAME_MATCH_THRESHOLD
-      );
-      if (!match) {
-        failedCriteria.push(`name_mismatch:${doc.type}`);
-        reasons.push(
-          `The ${labelFor(scheme, reference.type)} name does not match the ${labelFor(scheme, doc.type)} name.`
-        );
+      if (extracted) {
+        const passed = documentNamesMatch(applicantName, extracted, NAME_MATCH_THRESHOLD).match;
+        nameChecks.push({
+          type: doc.type, label, method: 'extracted-name', extractedName: extracted, passed,
+          detail: `${label}: name read as "${extracted}" matches the name you entered ("${applicantName}").`,
+        });
+        if (!passed) {
+          failName(
+            doc.type,
+            `The name on your ${label} ("${extracted}") does not match the name you entered ("${applicantName}").`
+          );
+        }
+      } else {
+        const passed = nameFoundInText(applicantName, doc.result.rawText).found;
+        nameChecks.push({
+          type: doc.type, label, method: 'text-search', extractedName: null, passed,
+          detail: `${label}: the name could not be read directly, but "${applicantName}" was found in the document's own text (parents'/spouse's names excluded).`,
+        });
+        if (!passed) {
+          failName(
+            doc.type,
+            `We could not find the name "${applicantName}" on your ${label}. Check the spelling, or upload a clearer copy.`
+          );
+        }
       }
     }
   }
 
-  return { reasons, failedCriteria, verifiedDocuments };
+  // 5b. Documents vs. each other (always runs when 2+ name-bearing documents exist).
+  if (namedDocs.length >= 2) {
+    const candidates = namedDocs.filter((d) => !failedNameDocs.has(d.type));
+    const reference = candidates.find((d) => d.result.extractedName) || candidates[0];
+
+    for (const doc of candidates) {
+      if (!reference || doc.type === reference.type) continue;
+      const refName = reference.result.extractedName;
+      const docName = doc.result.extractedName;
+      const refLabel = labelFor(scheme, reference.type);
+      const label = labelFor(scheme, doc.type);
+
+      if (refName && docName) {
+        const passed = documentNamesMatch(refName, docName, NAME_MATCH_THRESHOLD).match;
+        nameChecks.push({
+          type: doc.type, label, method: 'cross-document', comparedWith: reference.type, passed,
+          detail: `${label} ("${docName}") and ${refLabel} ("${refName}") carry the same name.`,
+        });
+        if (!passed) {
+          failName(
+            doc.type,
+            `The name on your ${label} ("${docName}") does not match the name on your ${refLabel} ("${refName}"). Both documents must belong to the same person.`
+          );
+        }
+        continue;
+      }
+
+      // One side's name could not be read. If the applicant typed a name, 5a already checked
+      // this document against it; only without a typed name do we need to compare here.
+      if (applicantName) continue;
+      if (refName && nameFoundInText(refName, doc.result.rawText).found) continue;
+      failedCriteria.push(`name_extraction:${doc.type}`);
+      reasons.push(`Could not extract the name from the ${label}.`);
+    }
+  }
+
+  return { reasons, failedCriteria, verifiedDocuments, nameChecks };
 }
 
 function labelFor(scheme, type) {
@@ -261,9 +300,14 @@ function evaluateEligibility(scheme, formData, documentResultsByType) {
   return {
     eligible,
     status,
-    reasons: eligible ? ['All required document checks passed.'] : reasons,
+    // When eligible, say WHY the names were accepted (how each document was matched),
+    // so the verdict is auditable rather than a bare "passed".
+    reasons: eligible
+      ? ['All required document checks passed.', ...docResult.nameChecks.filter((c) => c.passed).map((c) => c.detail)]
+      : reasons,
     failedCriteria,
     verifiedDocuments: docResult.verifiedDocuments,
+    nameChecks: docResult.nameChecks,
   };
 }
 

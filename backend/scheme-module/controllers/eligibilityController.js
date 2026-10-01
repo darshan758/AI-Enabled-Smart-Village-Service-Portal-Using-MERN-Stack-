@@ -151,6 +151,7 @@ async function checkEligibility(req, res, next) {
         status: verdict.status,
         reasons: verdict.reasons,
         failedCriteria: verdict.failedCriteria,
+        nameChecks: verdict.nameChecks,
         documentResults: documentResultsForResponse,
       },
     });

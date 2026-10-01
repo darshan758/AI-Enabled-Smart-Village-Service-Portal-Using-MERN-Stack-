@@ -186,22 +186,69 @@ function textTokens(rawText) {
   return [...tokens];
 }
 
+// Markers that introduce a RELATIVE's name (parent / spouse / guardian), in English and
+// Kannada: "S/O", "D/O", "W/O", "C/O", "father", "mother", "husband", "ಬಿನ್", "ತಂದೆ", "ತಾಯಿ"...
+// Everything from the marker onwards on that line names someone ELSE, so it must never be
+// used to decide that the document belongs to the applicant.
+const RELATION_MARKER_RE = new RegExp(
+  [
+    '\\b[sdwc]\\s*\\/\\s*o\\b',
+    '\\b(?:son|daughter|wife|husband)\\s+of\\b',
+    '\\b(?:father|mother|husband|wife|spouse|guardian)\\b',
+    'ಬಿನ್', 'ತಂದೆ', 'ತಾಯಿ', 'ಪತಿ', 'ಪತ್ನಿ', 'ಗಂಡ', 'ಹೆಂಡತಿ', 'ಮಗ', 'ಪುತ್ರ',
+  ].join('|'),
+  'i'
+);
+
+/**
+ * stripRelativeParts()
+ * Returns the document's lines with every relative's name cut off. A line such as
+ * "560001 KUMAR DARSHAN M ಬಿನ್ MANJUNATH" keeps only the applicant's part before the
+ * marker; "D/O: Bhagirathi" or "Father's Name: X" are dropped entirely.
+ */
+function stripRelativeParts(rawText) {
+  return String(rawText || '')
+    .split(/\r?\n/)
+    .map((line) => {
+      const idx = line.search(RELATION_MARKER_RE);
+      return (idx >= 0 ? line.slice(0, idx) : line).trim();
+    })
+    .filter(Boolean);
+}
+
+/**
+ * nameFoundInText()  — FALLBACK ONLY, for when no name could be read from a document.
+ * Safety rules (this is what stops one person's document passing as another's):
+ *  - text after a relation marker (S/O, D/O, W/O, father, mother, ಬಿನ್, ತಂದೆ...) is ignored;
+ *  - ALL typed name tokens must appear close together (same line, or two adjacent lines),
+ *    not scattered across the page.
+ */
 function nameFoundInText(typedName, rawText) {
   const typedTokens = toComparable(typedName || '').split(' ').filter((t) => t.length >= 2);
   if (typedTokens.length === 0) return { found: false, missing: [] };
-  const tokens = textTokens(rawText);
-  const isFound = (tok) =>
-    tokens.some(
-      (t) =>
-        t === tok ||
-        (tok.length >= 4 && t.length >= 4 && similarityScore(stripSchwa(tok), stripSchwa(t)) >= 0.85)
-    );
-  const missing = typedTokens.filter((t) => !isFound(t));
-  return { found: missing.length === 0, missing };
+
+  const lines = stripRelativeParts(rawText);
+  const windows = lines.map((l, i) => (i + 1 < lines.length ? `${l} ${lines[i + 1]}` : l));
+
+  let bestMissing = typedTokens;
+  for (const windowText of windows) {
+    const tokens = textTokens(windowText);
+    const isFound = (tok) =>
+      tokens.some(
+        (t) =>
+          t === tok ||
+          (tok.length >= 4 && t.length >= 4 && similarityScore(stripSchwa(tok), stripSchwa(t)) >= 0.85)
+      );
+    const missing = typedTokens.filter((t) => !isFound(t));
+    if (missing.length === 0) return { found: true, missing: [] };
+    if (missing.length < bestMissing.length) bestMissing = missing;
+  }
+  return { found: false, missing: bestMissing };
 }
 
 module.exports = {
   nameFoundInText,
+  stripRelativeParts,
   normalizeDocumentName,
   normalizeIncomeValue,
   similarityScore,
