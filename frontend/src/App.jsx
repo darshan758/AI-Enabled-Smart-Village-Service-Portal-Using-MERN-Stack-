@@ -41,6 +41,7 @@ import SchemeHomePage from './features/schemes/pages/HomePage';
 import SchemeListPage from './features/schemes/pages/SchemeListPage';
 import SchemeDetailPage from './features/schemes/pages/SchemeDetailPage';
 import EligibilityCheckPage from './features/schemes/pages/EligibilityCheckPage';
+import SchemeRecommendPage from './features/schemes/pages/RecommendPage';
 
 // Agricultural Market Price Checker (new native feature)
 import AgriLayout from './features/agri/AgriLayout';
@@ -254,6 +255,7 @@ export default function App() {
             <Route path="/schemes" element={<SchemeLayout />}>
               <Route index element={<SchemeHomePage />} />
               <Route path="list" element={<SchemeListPage />} />
+              <Route path="recommend" element={<SchemeRecommendPage />} />
               <Route path=":idOrSlug" element={<SchemeDetailPage />} />
               <Route path=":idOrSlug/apply" element={<EligibilityCheckPage />} />
             </Route>

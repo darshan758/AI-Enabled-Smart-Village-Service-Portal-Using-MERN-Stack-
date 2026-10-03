@@ -12,6 +12,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Send, MessageCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import api from '../../utils/api';
 import { FAQ_CATEGORIES, FAQ_DATA } from './faqData';
 
 // Only the 4 top-level topics are offered as quick-pick pills (matches the
@@ -20,7 +22,7 @@ import { FAQ_CATEGORIES, FAQ_DATA } from './faqData';
 const QUICK_CATEGORIES = FAQ_CATEGORIES.filter((c) => c.id !== 'account');
 
 const GREETING_TEXT =
-  "Hi! I'm the Smart Village Help Assistant. Ask me anything about reporting issues, checking scheme eligibility, or market prices — or pick a topic below.";
+  "Hi! I'm the Smart Village Help Assistant. Ask me in English or Kannada about reporting issues, schemes, farming or market prices. Type a complaint ID (SV-...) to see its live status — or pick a topic below.";
 
 function matchesQuery(entry, query) {
   const q = query.trim().toLowerCase();
@@ -54,6 +56,8 @@ export default function FaqChatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
+  const [thinking, setThinking] = useState(false);
+  const navigate = useNavigate();
   const scrollRef = useRef(null);
 
   // Seed the greeting the first time the widget is opened.
@@ -130,13 +134,9 @@ export default function FaqChatbot() {
     }
   };
 
-  const handleSend = () => {
-    const text = inputValue.trim();
-    if (!text) return;
-
-    pushMessage({ sender: 'user', text });
-    setInputValue('');
-
+  // Original offline keyword matcher — used automatically if the assistant
+  // API cannot be reached, so the widget never stops working.
+  const localAnswer = (text) => {
     const matches = FAQ_DATA.filter((entry) => matchesQuery(entry, text)).slice(0, 5);
 
     if (matches.length === 0) {
@@ -165,6 +165,46 @@ export default function FaqChatbot() {
         chipLayout: 'list',
       });
     }
+  };
+
+  const linkChips = (links) =>
+    (links || []).map((l) => ({ label: `➡️ ${l.label}`, onSelect: () => navigate(l.to) }));
+
+  // Smart path: ask the Village Assistant API (fuzzy FAQ retrieval, Kannada
+  // questions, live complaint-status lookup, page shortcuts).
+  const askAssistant = async (payload, userText) => {
+    setThinking(true);
+    try {
+      const { data } = await api.post('/assistant/ask', payload);
+      if (!data || !data.success || !data.answer) throw new Error('bad response');
+      const chips = [
+        ...(data.suggestions || []).map((s) => ({ label: s.question, onSelect: () => handleSuggestion(s) })),
+        ...linkChips(data.links),
+        backToTopicsChip,
+      ];
+      let meta;
+      if (data.type === 'faq' && data.confidence != null && data.confidence < 1) meta = `Best match · ${Math.round(data.confidence * 100)}% similarity`;
+      if (data.type === 'complaint_status' && data.found) meta = 'Live status from complaint records';
+      pushMessage({ sender: 'bot', text: data.answer, meta, chips, chipLayout: 'list' });
+    } catch (err) {
+      if (userText) localAnswer(userText);
+      else pushMessage({ sender: 'bot', text: 'The assistant is not reachable right now. Please try again.', chips: [backToTopicsChip], chipLayout: 'list' });
+    } finally {
+      setThinking(false);
+    }
+  };
+
+  const handleSuggestion = (s) => {
+    pushMessage({ sender: 'user', text: s.question });
+    askAssistant({ faqId: s.id }, null);
+  };
+
+  const handleSend = () => {
+    const text = inputValue.trim();
+    if (!text || thinking) return;
+    pushMessage({ sender: 'user', text });
+    setInputValue('');
+    askAssistant({ message: text }, text);
   };
 
   const handleKeyDown = (e) => {
@@ -197,6 +237,7 @@ export default function FaqChatbot() {
                 {msg.sender === 'bot' ? (
                   <div className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm leading-relaxed max-w-[90%] whitespace-pre-line">
                     {msg.text}
+                    {msg.meta && <div className="text-[11px] text-gray-400 mt-2">{msg.meta}</div>}
                   </div>
                 ) : (
                   <div className="flex justify-end">
@@ -226,6 +267,7 @@ export default function FaqChatbot() {
                 )}
               </div>
             ))}
+            {thinking && <div className="text-xs text-gray-400 px-1">Thinking…</div>}
           </div>
 
           {/* Input bar */}

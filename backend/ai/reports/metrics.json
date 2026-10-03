@@ -1,0 +1,534 @@
+{
+  "dataset": {
+    "rows": 2089,
+    "phrases": 154,
+    "trainRows": 1707,
+    "testRows": 382,
+    "realisticTestRows": 36,
+    "languages": [
+      "English",
+      "Kannada script",
+      "Romanized Kannada"
+    ]
+  },
+  "heldOut": {
+    "category": {
+      "accuracy": 0.702,
+      "macroF1": 0.68,
+      "perClass": [
+        {
+          "class": "Road Damage",
+          "precision": 0.718,
+          "recall": 1,
+          "f1": 0.836,
+          "support": 56
+        },
+        {
+          "class": "Street Light Damage",
+          "precision": 0.737,
+          "recall": 1,
+          "f1": 0.848,
+          "support": 56
+        },
+        {
+          "class": "Water Leakage",
+          "precision": 0.726,
+          "recall": 1,
+          "f1": 0.841,
+          "support": 53
+        },
+        {
+          "class": "Garbage Issue",
+          "precision": 0.686,
+          "recall": 0.444,
+          "f1": 0.539,
+          "support": 54
+        },
+        {
+          "class": "Drainage Problem",
+          "precision": 0.943,
+          "recall": 0.6,
+          "f1": 0.733,
+          "support": 55
+        },
+        {
+          "class": "Electricity Problem",
+          "precision": 0.762,
+          "recall": 0.604,
+          "f1": 0.674,
+          "support": 53
+        },
+        {
+          "class": "Others",
+          "precision": 0.326,
+          "recall": 0.255,
+          "f1": 0.286,
+          "support": 55
+        }
+      ],
+      "confusion": [
+        [
+          56,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          56,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          53,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          24,
+          0,
+          7,
+          21
+        ],
+        [
+          0,
+          0,
+          19,
+          3,
+          33,
+          0,
+          0
+        ],
+        [
+          9,
+          3,
+          0,
+          1,
+          0,
+          32,
+          8
+        ],
+        [
+          13,
+          15,
+          1,
+          7,
+          2,
+          3,
+          14
+        ]
+      ]
+    },
+    "priority": {
+      "accuracy": 0.518,
+      "macroF1": 0.523,
+      "perClass": [
+        {
+          "class": "Low",
+          "precision": 0.632,
+          "recall": 0.471,
+          "f1": 0.539,
+          "support": 51
+        },
+        {
+          "class": "Medium",
+          "precision": 0.693,
+          "recall": 0.444,
+          "f1": 0.542,
+          "support": 117
+        },
+        {
+          "class": "High",
+          "precision": 0.336,
+          "recall": 0.485,
+          "f1": 0.397,
+          "support": 99
+        },
+        {
+          "class": "Critical",
+          "precision": 0.587,
+          "recall": 0.643,
+          "f1": 0.614,
+          "support": 115
+        }
+      ],
+      "confusion": [
+        [
+          24,
+          9,
+          18,
+          0
+        ],
+        [
+          10,
+          52,
+          48,
+          7
+        ],
+        [
+          3,
+          3,
+          48,
+          45
+        ],
+        [
+          1,
+          11,
+          29,
+          74
+        ]
+      ]
+    },
+    "ruleBasedPriority": {
+      "accuracy": 0.275,
+      "macroF1": 0.26,
+      "perClass": [
+        {
+          "class": "Low",
+          "precision": 0.186,
+          "recall": 0.314,
+          "f1": 0.234,
+          "support": 51
+        },
+        {
+          "class": "Medium",
+          "precision": 0.295,
+          "recall": 0.436,
+          "f1": 0.352,
+          "support": 117
+        },
+        {
+          "class": "High",
+          "precision": 0.153,
+          "recall": 0.111,
+          "f1": 0.129,
+          "support": 99
+        },
+        {
+          "class": "Critical",
+          "precision": 0.529,
+          "recall": 0.235,
+          "f1": 0.325,
+          "support": 115
+        }
+      ],
+      "confusion": [
+        [
+          16,
+          24,
+          11,
+          0
+        ],
+        [
+          37,
+          51,
+          21,
+          8
+        ],
+        [
+          22,
+          50,
+          11,
+          16
+        ],
+        [
+          11,
+          48,
+          29,
+          27
+        ]
+      ]
+    },
+    "priorityWithinOneLevel": 0.895,
+    "categoryWhenConfident": [
+      {
+        "threshold": 0.5,
+        "coverage": 0.662,
+        "accuracy": 0.85
+      },
+      {
+        "threshold": 0.6,
+        "coverage": 0.529,
+        "accuracy": 0.891
+      },
+      {
+        "threshold": 0.7,
+        "coverage": 0.398,
+        "accuracy": 0.947
+      }
+    ]
+  },
+  "realistic": {
+    "category": {
+      "accuracy": 0.833,
+      "macroF1": 0.818,
+      "perClass": [
+        {
+          "class": "Road Damage",
+          "precision": 0.8,
+          "recall": 0.8,
+          "f1": 0.8,
+          "support": 5
+        },
+        {
+          "class": "Street Light Damage",
+          "precision": 0.667,
+          "recall": 1,
+          "f1": 0.8,
+          "support": 4
+        },
+        {
+          "class": "Water Leakage",
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "support": 5
+        },
+        {
+          "class": "Garbage Issue",
+          "precision": 0.8,
+          "recall": 0.8,
+          "f1": 0.8,
+          "support": 5
+        },
+        {
+          "class": "Drainage Problem",
+          "precision": 0.857,
+          "recall": 1,
+          "f1": 0.923,
+          "support": 6
+        },
+        {
+          "class": "Electricity Problem",
+          "precision": 1,
+          "recall": 0.714,
+          "f1": 0.833,
+          "support": 7
+        },
+        {
+          "class": "Others",
+          "precision": 0.667,
+          "recall": 0.5,
+          "f1": 0.571,
+          "support": 4
+        }
+      ],
+      "confusion": [
+        [
+          4,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          4,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          5,
+          1
+        ],
+        [
+          0,
+          1,
+          0,
+          0,
+          1,
+          0,
+          2
+        ]
+      ]
+    },
+    "priority": {
+      "accuracy": 0.611,
+      "macroF1": 0.651,
+      "perClass": [
+        {
+          "class": "Low",
+          "precision": 0.8,
+          "recall": 0.5,
+          "f1": 0.615,
+          "support": 8
+        },
+        {
+          "class": "Medium",
+          "precision": 0.385,
+          "recall": 0.5,
+          "f1": 0.435,
+          "support": 10
+        },
+        {
+          "class": "High",
+          "precision": 0.692,
+          "recall": 0.643,
+          "f1": 0.667,
+          "support": 14
+        },
+        {
+          "class": "Critical",
+          "precision": 0.8,
+          "recall": 1,
+          "f1": 0.889,
+          "support": 4
+        }
+      ],
+      "confusion": [
+        [
+          4,
+          4,
+          0,
+          0
+        ],
+        [
+          1,
+          5,
+          4,
+          0
+        ],
+        [
+          0,
+          4,
+          9,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          4
+        ]
+      ]
+    },
+    "ruleBasedPriority": {
+      "accuracy": 0.361,
+      "macroF1": 0.294,
+      "perClass": [
+        {
+          "class": "Low",
+          "precision": 0.444,
+          "recall": 0.5,
+          "f1": 0.471,
+          "support": 8
+        },
+        {
+          "class": "Medium",
+          "precision": 0.278,
+          "recall": 0.5,
+          "f1": 0.357,
+          "support": 10
+        },
+        {
+          "class": "High",
+          "precision": 0.444,
+          "recall": 0.286,
+          "f1": 0.348,
+          "support": 14
+        },
+        {
+          "class": "Critical",
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 4
+        }
+      ],
+      "confusion": [
+        [
+          4,
+          3,
+          1,
+          0
+        ],
+        [
+          4,
+          5,
+          1,
+          0
+        ],
+        [
+          1,
+          9,
+          4,
+          0
+        ],
+        [
+          0,
+          1,
+          3,
+          0
+        ]
+      ]
+    },
+    "priorityWithinOneLevel": 1,
+    "categoryWhenConfident": [
+      {
+        "threshold": 0.5,
+        "coverage": 0.917,
+        "accuracy": 0.879
+      },
+      {
+        "threshold": 0.6,
+        "coverage": 0.833,
+        "accuracy": 0.933
+      },
+      {
+        "threshold": 0.7,
+        "coverage": 0.778,
+        "accuracy": 0.929
+      }
+    ]
+  }
+}

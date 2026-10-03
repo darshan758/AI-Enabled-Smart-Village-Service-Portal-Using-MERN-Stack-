@@ -50,6 +50,7 @@ const TABS = [
   { id: 'fertilizer', label: 'Fertilizer (NPK)' },
   { id: 'trend', label: 'Price Trend & Harvest Advice' },
   { id: 'market', label: 'Suggested Market' },
+  { id: 'weather', label: 'Weather Alerts' },
 ];
 
 const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20 };
@@ -90,6 +91,7 @@ export default function AdvisoryPage() {
       {tab === 'fertilizer' && <FertilizerTab />}
       {tab === 'trend' && <PriceTrendTab />}
       {tab === 'market' && <SuggestedMarketTab />}
+      {tab === 'weather' && <WeatherAlertsTab />}
     </div>
   );
 }
@@ -390,6 +392,83 @@ function SuggestedMarketTab() {
           No current price records found for that commodity to compare markets against.
         </p>
       )}
+    </div>
+  );
+}
+
+// ── Weather Alerts ───────────────────────────────────────────────────────
+// Calls GET /api/agri/weather-alerts (rule-based alerts over the 5-day
+// OpenWeatherMap forecast). Failures (no API key, offline, unknown district)
+// are shown as a plain message and never break the other tabs.
+const SEVERITY_STYLE = {
+  high:   { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c', label: 'High' },
+  medium: { bg: '#fffbeb', border: '#fde68a', color: '#b45309', label: 'Medium' },
+  low:    { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d', label: 'Low' },
+};
+
+function WeatherAlertsTab() {
+  const [district, setDistrict] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true); setError(''); setResult(null);
+    try {
+      const params = new URLSearchParams({ district });
+      const { data } = await api.get(`/agri/weather-alerts?${params}`);
+      setResult(data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Weather service is not reachable right now. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={card}>
+      <h2 style={cardTitle}>Weather alerts for farming / ಹವಾಮಾನ ಎಚ್ಚರಿಕೆ</h2>
+      <p style={cardSub}>
+        Rule-based alerts from the 5-day forecast (rain, heat, cold, wind). Each alert shows the values that triggered it.
+      </p>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <select required value={district} onChange={(e) => setDistrict(e.target.value)} className={inputCls}>
+          <option value="">District…</option>
+          {KARNATAKA_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <button type="submit" disabled={loading} style={{ ...btn, opacity: loading ? 0.6 : 1 }}>
+          {loading ? 'Checking…' : 'Get Weather Alerts'}
+        </button>
+      </form>
+
+      {error && <p style={errorBox}>{error}</p>}
+
+      {result?.success && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 8 }}>
+            Forecast for <strong>{result.city || result.district}</strong>
+            {result.stale ? ' (showing last saved forecast — live service was unreachable)' : ''}
+          </p>
+          {(result.alerts || []).map((a, i) => {
+            const st = SEVERITY_STYLE[a.severity] || SEVERITY_STYLE.low;
+            return (
+              <div key={i} style={{
+                background: st.bg, border: `1px solid ${st.border}`, borderRadius: 10,
+                padding: 14, marginBottom: 10, fontSize: '0.875rem',
+              }}>
+                <span style={{ color: st.color, fontWeight: 700, marginRight: 8 }}>
+                  {st.label}
+                </span>
+                {a.message}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p style={disclaimer}>Source: OpenWeatherMap forecast. Alerts are advisory only.</p>
     </div>
   );
 }

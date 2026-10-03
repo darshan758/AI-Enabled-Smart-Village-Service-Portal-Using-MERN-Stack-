@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import VoiceInput from '../features/schemes/components/VoiceInput';
 import { suggestCategoryFromText } from '../utils/kannadaKeywords';
+import AiSuggestion from '../components/AiSuggestion';
 
 export default function ComplaintForm() {
   const navigate = useNavigate();
@@ -244,6 +245,15 @@ export default function ComplaintForm() {
                 placeholder="Describe the issue in detail…" maxLength={1000} />
               <p className="text-xs text-gray-400 mt-1 text-right">{form.description.length}/1000</p>
             </div>
+
+            <AiSuggestion
+              title={form.title}
+              description={form.description}
+              category={form.category}
+              priority={form.priority}
+              onUseCategory={(c) => setForm((f) => ({ ...f, category: c }))}
+              onUsePriority={(p) => setForm((f) => ({ ...f, priority: p }))}
+            />
 
             {/* Image upload */}
             <div>

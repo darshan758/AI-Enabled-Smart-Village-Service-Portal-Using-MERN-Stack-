@@ -12,6 +12,7 @@ const {
   getVoiceNote,
 } = require('../controllers/complaintController');
 
+const { suggest: aiSuggest } = require('../controllers/aiController');
 const { protect } = require('../middleware/authMiddleware');
 const { complaintUpload } = require('../middleware/complaintUpload');
 
@@ -25,6 +26,9 @@ router.use(protect);
 
 // duplicate check (GET — reads req.query params)
 router.get('/check-duplicate', checkDuplicateEndpoint);
+
+// AI suggestion (category + priority) while the citizen is typing
+router.post('/ai-suggest', aiSuggest);
 
 // create complaint
 router.post(

@@ -52,6 +52,7 @@ app.use('/api/eligibility', require('./scheme-module/routes/eligibility'));
 // ================= AGRICULTURAL MARKET PRICE CHECKER =================
 // Live daily mandi prices from India's official Agmarknet open data API.
 app.use('/api/agri', require('./routes/agriRoutes'));
+app.use('/api/assistant', require('./routes/assistantRoutes'));
 
 // ================= PUBLIC VILLAGE ROUTE =================
 const Village = require('./models/Village');
@@ -152,8 +153,21 @@ mongoose
         console.log(`🤖 SLA agent scheduled every ${everyMs / 60000} min`);
       }
 
+      // ── Worker-SLA / stalled-review escalation ─────────────────────────
+      // Safe wrapper: any error is caught and logged, never crashes the server.
+      // Disable with WORKER_ESCALATION_ENABLED=false.
+      if (process.env.WORKER_ESCALATION_ENABLED !== 'false') {
+        const runWorkerEscalation = require('./utils/workerEscalate');
+        const safeRun = () => Promise.resolve(runWorkerEscalation()).catch((e) => console.error('[workerEscalate]', e.message));
+        setTimeout(safeRun, 90 * 1000);
+        setInterval(safeRun, 60 * 60 * 1000);
+        console.log('⏱️ Worker escalation scheduled hourly');
+      }
+
     });
   })
   .catch((err) => {
     console.error('❌ MongoDB connection failed:', err.message);
+    console.error('   Check MONGO_URI in backend/.env and that MongoDB is running. Exiting.');
+    process.exit(1); // fail loudly instead of staying alive with no open port
   });

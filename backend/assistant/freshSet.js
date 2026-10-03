@@ -1,0 +1,20 @@
+// Fresh queries written AFTER the retriever and synonym list were finished (not used for tuning).
+module.exports = [
+  ['is registration compulsory', ['gen-3', 'acc-1']], ['how can i change my forgotten password', ['acc-2']],
+  ['whom should I call if something is not working', ['acc-3']], ['does using this app cost money', ['gen-2']],
+  ['what services does this portal give', ['gen-1']], ['how do I tell the panchayat about a street light that is off', ['comp-1']],
+  ['can I add my location to a complaint', ['comp-4']], ['how many days to get a complaint solved', ['comp-5']],
+  ['what do I do after sending the complaint', ['comp-3', 'new-who-fixes']], ['what is the scheme checker', ['scheme-1']],
+  ['which certificates do I need for checking eligibility', ['scheme-2', 'new-scholarship-docs']], ['how are my certificates read by the system', ['scheme-3']],
+  ['if it says eligible will I surely get the money', ['scheme-4']], ['source of the rate data', ['agri-1']],
+  ['when do the rates change', ['agri-2']], ['show tomato rates for mysuru', ['agri-3']],
+  ['is there a rain warning for my village', ['new-weather']], ['suggest crops for black soil in winter', ['new-crop']],
+  ['fertilizer quantity per acre for ragi', ['new-fertilizer']], ['price is falling should I hold my stock', ['new-sellwait']],
+  ['where will I get the highest rate for onions', ['new-market']], ['speak instead of typing the description', ['new-voice']],
+  ['do officers get my voice recording', ['new-privacy', 'new-voice']], ['why does the form suggest a category', ['new-ai-suggest']],
+  ['nobody attended my complaint for a week', ['new-delay']], ['do you keep my aadhaar copy', ['new-privacy']],
+  ['will a text message come when work is finished', ['new-sms']], ['can I use the portal in kannada', ['new-lang', 'gen-4']],
+  ['ಲಾಗಿನ್ ಮಾಡದೆ ದೂರಿನ ಸ್ಥಿತಿ ನೋಡಬಹುದೇ', ['new-track-id', 'comp-2']], ['ಈ ಯೋಜನೆಗೆ ಅರ್ಹನಾ', ['new-schemes-rec', 'scheme-1']],
+  ['ಬೆಲೆ ಕಡಿಮೆ ಇದೆ ಈಗ ಮಾರಬೇಕೇ', ['new-sellwait']], ['ಮಣ್ಣಿಗೆ ತಕ್ಕ ಬೆಳೆ', ['new-crop']],
+  ['who is the prime minister of india', null], ['play some music', null], ['what is the price of gold today', null], ['how to cook biryani', null],
+];

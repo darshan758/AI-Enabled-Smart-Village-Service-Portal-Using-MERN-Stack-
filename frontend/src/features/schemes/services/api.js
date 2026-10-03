@@ -15,13 +15,15 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Handle 401 globally — redirect to the correct login page based on role.
-// Admin, Superadmin and Department all share the back-office login at
-// /admin/login; citizens and workers use the citizen login at /login.
+// Handle 401 globally — redirect to the correct login page based on role
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (error.response?.status === 401) {
+    // A 401 from the login/register call itself means "wrong credentials" - let the
+    // form show its own error instead of reloading the page.
+    const reqUrl = error.config?.url || '';
+    const isAuthAttempt = /\/auth\/(login|register)/.test(reqUrl);
+    if (error.response?.status === 401 && !isAuthAttempt) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       const path = window.location.pathname;
@@ -54,11 +56,7 @@ export async function checkEligibility({ schemeId, formData, files }) {
     if (file) body.append(type, file);
   });
 
-  // OCR (incl. Kannada) on several documents can take well over the default
-  // 30s on a first run or a slow machine, so this one call gets a longer limit.
   const response = await api.post('/eligibility/check', body, { timeout: 120000 });
-  // Backend responds { success, data: {...verdict} } — unwrap like the
-  // other helpers so callers get the verdict itself.
   return response.data.data;
 }
 
