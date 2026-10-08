@@ -23,6 +23,7 @@ export default function MandiPricesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [records, setRecords] = useState(null); // null = "haven't searched yet"
+  const [notice, setNotice] = useState(null); // set when showing saved/sample (non-live) prices
   const [stateTotal, setStateTotal] = useState(0); // raw govt total for the whole state, before our filtering
 
   const handleSearch = async (e) => {
@@ -30,6 +31,7 @@ export default function MandiPricesPage() {
     setLoading(true);
     setError('');
     setRecords(null);
+    setNotice(null);
 
     try {
       const params = new URLSearchParams({ state: 'Karnataka' });
@@ -39,6 +41,7 @@ export default function MandiPricesPage() {
       const { data } = await api.get(`/agri/prices?${params}`);
       setRecords(data.records || []);
       setStateTotal(data.total || 0);
+      setNotice(data.source && data.source !== 'live' ? { source: data.source, text: data.notice } : null);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -105,6 +108,17 @@ export default function MandiPricesPage() {
         <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
           {stateTotal} Karnataka price record(s) are available right now, but none matched that specific district/commodity.
           Try a different district or commodity, or check "All."
+        </p>
+      )}
+
+      {notice && records && (
+        <p style={{
+          fontSize: '0.85rem', marginBottom: 12, borderRadius: 8, padding: '10px 14px',
+          color: notice.source === 'sample' ? '#9a3412' : '#854d0e',
+          background: notice.source === 'sample' ? '#fff7ed' : '#fefce8',
+          border: `1px solid ${notice.source === 'sample' ? '#fdba74' : '#fde68a'}`,
+        }}>
+          {notice.text}
         </p>
       )}
 

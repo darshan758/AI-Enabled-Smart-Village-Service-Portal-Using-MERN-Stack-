@@ -30,7 +30,7 @@ exports.getMandiPrices = async (req, res) => {
   try {
     const { state, district, commodity } = req.query;
 
-    const { records: allRecords, total } = await fetchMandiPrices({
+    const { records: allRecords, total, source, asOf, notice } = await fetchMandiPrices({
       state: state || 'Karnataka',
       limit: 500,
     });
@@ -40,7 +40,8 @@ exports.getMandiPrices = async (req, res) => {
     // Accumulate history for trend/harvest-advice — fire-and-forget,
     // never blocks or fails the actual price response the citizen is
     // waiting on.
-    recordSnapshot(allRecords).catch(() => {});
+    // Only REAL live data is recorded - never cached/sample fallback rows.
+    if (source === 'live') recordSnapshot(allRecords).catch(() => {});
 
     if (district) {
       const variants = getDistrictVariants(district).map((v) => v.toLowerCase());
@@ -60,6 +61,9 @@ exports.getMandiPrices = async (req, res) => {
       success: true,
       total,
       count: records.length,
+      source,   // 'live' | 'cached' | 'sample'
+      asOf,
+      notice,   // null when live
       records,
     });
   } catch (err) {
@@ -127,14 +131,14 @@ exports.getSuggestedMarket = async (req, res) => {
       return res.status(400).json({ success: false, message: 'commodity and fromDistrict are required' });
     }
 
-    const { records } = await fetchMandiPrices({ state: state || 'Karnataka', limit: 500 });
+    const { records, source, asOf, notice } = await fetchMandiPrices({ state: state || 'Karnataka', limit: 500 });
     const result = suggestMarkets({
       records,
       commodity: bareCommodityName(commodity),
       fromDistrict,
       quintals: Number(quintals) || 1,
     });
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...result, source, asOf, notice });
   } catch (err) {
     console.error('[Agri] suggested-market error:', err.message);
     const status = err.code === 'NOT_CONFIGURED' ? 500 : 503;
