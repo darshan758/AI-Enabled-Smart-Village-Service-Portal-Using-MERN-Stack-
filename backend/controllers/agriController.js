@@ -2,13 +2,14 @@
 
 const { fetchMandiPrices } = require('../utils/agmarknetClient');
 const { getDistrictVariants } = require('../utils/districtSynonyms');
+const { commodityRegex } = require('../utils/commodityMatch');
 const { recordSnapshot, computeTrend } = require('../utils/priceHistoryRecorder');
 const { getHarvestAdvice } = require('../utils/harvestAdvice');
 const { suggestMarkets } = require('../utils/suggestedMarket');
 const { SEASONS, SOIL_TYPES, getCropRecommendation } = require('../utils/cropRecommendation');
 const { LEVELS, CROP_BASE_DOSE_KG_PER_ACRE, getFertilizerRecommendation } = require('../utils/fertilizerRecommendation');
 const { fetchForecast } = require('../utils/weatherClient');
-const { getCropWeatherAlerts } = require('../utils/weatherAlerts');
+const { getCropWeatherAlerts, buildWeatherSummary } = require('../utils/weatherAlerts');
 
 // Strip parenthetical UI-friendly labels (e.g. "Ragi (Finger Millet)" -> "Ragi")
 // before matching against the government dataset's raw commodity names.
@@ -30,7 +31,7 @@ exports.getMandiPrices = async (req, res) => {
   try {
     const { state, district, commodity } = req.query;
 
-    const { records: allRecords, total } = await fetchMandiPrices({
+    const { records: allRecords, total, source, asOf, notice } = await fetchMandiPrices({
       state: state || 'Karnataka',
       limit: 500,
     });
@@ -40,7 +41,8 @@ exports.getMandiPrices = async (req, res) => {
     // Accumulate history for trend/harvest-advice — fire-and-forget,
     // never blocks or fails the actual price response the citizen is
     // waiting on.
-    recordSnapshot(allRecords).catch(() => {});
+    // Only REAL live data is recorded - never cached/sample fallback rows.
+    if (source === 'live') recordSnapshot(allRecords).catch(() => {});
 
     if (district) {
       const variants = getDistrictVariants(district).map((v) => v.toLowerCase());
@@ -50,16 +52,17 @@ exports.getMandiPrices = async (req, res) => {
     }
 
     if (commodity) {
-      const bare = bareCommodityName(commodity).toLowerCase();
-      records = records.filter((r) =>
-        (r.commodity || '').toLowerCase().includes(bare)
-      );
+      const re = commodityRegex(commodity);
+      records = records.filter((r) => re.test(r.commodity || ''));
     }
 
     res.json({
       success: true,
       total,
       count: records.length,
+      source,   // 'live' | 'cached' | 'sample'
+      asOf,
+      notice,   // null when live
       records,
     });
   } catch (err) {
@@ -88,8 +91,8 @@ exports.getPriceTrend = async (req, res) => {
     if (!district || !commodity) {
       return res.status(400).json({ success: false, message: 'district and commodity are required' });
     }
-    const trend = await computeTrend({ district, commodity: bareCommodityName(commodity) });
-    res.json({ success: true, district, commodity, trend: trend || { available: false } });
+    const trend = await computeTrend({ district, commodity: bareCommodityName(commodity), commodityRegex: commodityRegex(commodity), districtVariants: getDistrictVariants(district) });
+    res.json({ success: true, district, commodity, trend: trend && !trend.insufficient ? trend : { available: false } });
   } catch (err) {
     console.error('[Agri] price-trend error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to compute price trend' });
@@ -106,7 +109,7 @@ exports.getHarvestAdviceHandler = async (req, res) => {
     if (!district || !commodity) {
       return res.status(400).json({ success: false, message: 'district and commodity are required' });
     }
-    const trend = await computeTrend({ district, commodity: bareCommodityName(commodity) });
+    const trend = await computeTrend({ district, commodity: bareCommodityName(commodity), commodityRegex: commodityRegex(commodity), districtVariants: getDistrictVariants(district) });
     const advice = getHarvestAdvice(trend);
     res.json({ success: true, district, commodity, ...advice });
   } catch (err) {
@@ -127,14 +130,15 @@ exports.getSuggestedMarket = async (req, res) => {
       return res.status(400).json({ success: false, message: 'commodity and fromDistrict are required' });
     }
 
-    const { records } = await fetchMandiPrices({ state: state || 'Karnataka', limit: 500 });
+    const { records, source, asOf, notice } = await fetchMandiPrices({ state: state || 'Karnataka', limit: 500 });
     const result = suggestMarkets({
       records,
       commodity: bareCommodityName(commodity),
+      commodityRegex: commodityRegex(commodity),
       fromDistrict,
       quintals: Number(quintals) || 1,
     });
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...result, source, asOf, notice });
   } catch (err) {
     console.error('[Agri] suggested-market error:', err.message);
     const status = err.code === 'NOT_CONFIGURED' ? 500 : 503;
@@ -193,6 +197,7 @@ exports.getWeatherAlerts = async (req, res) => {
       city: forecast.city,
       stale: forecast.stale || false,
       alerts,
+      weather: buildWeatherSummary(forecast),
     });
   } catch (err) {
     console.error('[Agri] weather-alerts error:', err.message);

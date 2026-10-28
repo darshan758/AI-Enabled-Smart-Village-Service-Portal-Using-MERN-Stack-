@@ -8,10 +8,16 @@
 // it is never mistaken for a guarantee.
 
 function getHarvestAdvice(trend) {
-  if (!trend) {
+  if (!trend || trend.insufficient) {
+    const have = trend?.dayCount || 0;
+    const needed = trend?.needed || 3;
     return {
       available: false,
-      message: 'Not enough price history yet for this crop/district to suggest anything — check back after a few more days of data.',
+      dayCount: have,
+      needed,
+      message: have === 0
+        ? `No price history recorded yet for this crop in this district. We need at least ${needed} days of prices - check back in a few days.`
+        : `We have ${have} day${have === 1 ? '' : 's'} of prices for this crop so far; we need at least ${needed} days to suggest anything. Check back in ${needed - have} more day${needed - have === 1 ? '' : 's'}.`,
     };
   }
 

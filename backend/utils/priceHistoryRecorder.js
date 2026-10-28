@@ -58,10 +58,18 @@ async function recordSnapshot(records) {
  * Returns { direction, changePercent, dayCount, dailyModalPrices } or
  * null if there isn't enough accumulated history yet.
  */
-async function computeTrend({ district, commodity }) {
-  const rows = await PriceHistory.find({ district, commodity, modalPrice: { $ne: null } })
-    .sort({ recordedAt: 1 })
-    .lean();
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+async function computeTrend({ district, commodity, commodityRegex, districtVariants }) {
+  // district: match any known spelling (Ballari/Bellary, Davanagere/Davangere ...)
+  const districts = (districtVariants && districtVariants.length ? districtVariants : [district]);
+  const query = {
+    district: { $in: districts.map((d) => new RegExp('^' + escapeRe(String(d)) + '$', 'i')) },
+    modalPrice: { $ne: null },
+  };
+  query.commodity = commodityRegex || commodity;
+
+  const rows = await PriceHistory.find(query).lean();
 
   // Collapse to one average modal price per calendar day (a district can
   // have several markets reporting the same commodity on the same day).
@@ -71,13 +79,17 @@ async function computeTrend({ district, commodity }) {
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push(r.modalPrice);
   }
-  const dailyModalPrices = [...byDay.entries()].map(([day, prices]) => ({
-    day,
-    avgModalPrice: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
-  }));
+  // dates are "dd/mm/yyyy" strings - sort them as real dates, oldest first
+  const toTime = (d) => { const [dd, mm, yy] = String(d).split('/'); return new Date(`${yy}-${mm}-${dd}`).getTime() || 0; };
+  const dailyModalPrices = [...byDay.entries()]
+    .sort((a, b) => toTime(a[0]) - toTime(b[0]))
+    .map(([day, prices]) => ({
+      day,
+      avgModalPrice: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+    }));
 
   if (dailyModalPrices.length < MIN_DAYS_FOR_TREND) {
-    return null; // honestly not enough data yet — no fabricated trend
+    return { insufficient: true, dayCount: dailyModalPrices.length, needed: MIN_DAYS_FOR_TREND };
   }
 
   const first = dailyModalPrices[0].avgModalPrice;

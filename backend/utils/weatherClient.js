@@ -48,8 +48,12 @@ async function fetchForecast(district) {
     // response has ~40 timestamped entries (3-hour steps, 5 days).
     const slices = (data.list || []).map((entry) => ({
       time: entry.dt_txt,
+      ts: entry.dt ? entry.dt * 1000 : null, // true UTC instant (dt_txt has no timezone)
       tempC: entry.main?.temp,
+      feelsLikeC: entry.main?.feels_like,
       humidity: entry.main?.humidity,
+      pop: typeof entry.pop === 'number' ? entry.pop : 0, // probability of precipitation, 0..1
+      cloudsPct: entry.clouds?.all ?? null,
       rainMm: entry.rain?.['3h'] || 0,
       windSpeedMs: entry.wind?.speed,
       condition: entry.weather?.[0]?.main || null,

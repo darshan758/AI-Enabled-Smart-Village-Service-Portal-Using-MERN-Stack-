@@ -13,6 +13,9 @@ const {
 
 const router = express.Router();
 
+// Keep price history growing even when nobody searches (see utils/priceHistoryJob.js)
+require('../utils/priceHistoryJob').startDailyPriceRecorder();
+
 // Public — no auth required, matching the scheme eligibility checker's design
 router.get('/prices', getMandiPrices);
 router.get('/price-trend', getPriceTrend);

@@ -45,4 +45,14 @@ function getDistrictVariants(district) {
   return DISTRICT_SYNONYMS[district] || [district];
 }
 
-module.exports = { DISTRICT_SYNONYMS, getDistrictVariants };
+/** Maps any dataset spelling (Bellary, Davangere, Bengaluru South...) to our official name, or returns the input unchanged. */
+function canonicalDistrict(name) {
+  if (!name) return name;
+  const n = String(name).toLowerCase();
+  for (const [official, variants] of Object.entries(DISTRICT_SYNONYMS)) {
+    if (variants.some((v) => v.toLowerCase() === n)) return official;
+  }
+  return name;
+}
+
+module.exports = { DISTRICT_SYNONYMS, getDistrictVariants, canonicalDistrict };

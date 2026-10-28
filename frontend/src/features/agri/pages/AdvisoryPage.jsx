@@ -406,6 +406,88 @@ const SEVERITY_STYLE = {
   low:    { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d', label: 'Low' },
 };
 
+// Plain-language weather details shown above the alerts: temperature,
+// humidity, chance of rain and wind - now, next 24 hours, and per day.
+const RAIN_COLOR = (p) => (p >= 70 ? '#1d4ed8' : p >= 40 ? '#2563eb' : p >= 20 ? '#0891b2' : '#64748b');
+
+function Stat({ icon, label, value, sub, color }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>
+        {icon} {label}
+      </div>
+      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: color || '#0f172a', marginTop: 2 }}>{value}</div>
+      {sub && <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function dayLabel(dateStr, i) {
+  if (i === 0) return 'Today';
+  if (i === 1) return 'Tomorrow';
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function WeatherDetails({ weather, name }) {
+  if (!weather) return null;
+  const { now, next24h, daily } = weather;
+  const cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
+  return (
+    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, marginBottom: 14 }}>
+      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
+        Weather in {name} · {cap(now.description) || 'Current conditions'}
+      </div>
+      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 12 }}>
+        Current conditions (nearest forecast time). Rain chance = probability of rain in that 3-hour period.
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+        <Stat icon="🌡️" label="Temperature" value={`${now.tempC}°C`}
+              sub={`Feels like ${now.feelsLikeC}°C · Next 24h: ${next24h.tempMinC}° – ${next24h.tempMaxC}°C`} />
+        <Stat icon="💧" label="Humidity" value={`${now.humidity}%`}
+              sub={`Next 24h: ${next24h.humidityMin}% – ${next24h.humidityMax}%`} />
+        <Stat icon="🌧️" label="Chance of rain" value={`${now.rainChancePct}%`}
+              color={RAIN_COLOR(now.rainChancePct)}
+              sub={`${now.rainChanceLabel} now · up to ${next24h.rainChancePct}% in next 24h`} />
+        <Stat icon="☔" label="Rain (next 24h)" value={`${next24h.rainMm} mm`}
+              sub={next24h.rainMm === 0 ? 'No rain expected' : next24h.rainMm < 5 ? 'Light' : next24h.rainMm < 20 ? 'Moderate' : 'Heavy'} />
+        <Stat icon="💨" label="Wind" value={`${now.windKmh} km/h`}
+              sub={`Up to ${next24h.windMaxKmh} km/h in next 24h`} />
+        <Stat icon="☁️" label="Cloud cover" value={now.cloudsPct != null ? `${now.cloudsPct}%` : '—'} />
+      </div>
+
+      {daily?.length > 0 && (
+        <div style={{ overflowX: 'auto', marginTop: 14 }}>
+          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', background: '#fff', border: '1px solid #e2e8f0' }}>
+            <thead>
+              <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+                {['Day', 'Weather', 'Temp (min – max)', 'Humidity', 'Rain chance', 'Rain (mm)', 'Wind'].map((h) => (
+                  <th key={h} style={{ padding: '8px 10px', fontSize: '0.7rem', textTransform: 'uppercase', color: '#475569' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {daily.map((d, i) => (
+                <tr key={d.date} style={{ borderTop: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '8px 10px', fontWeight: 600 }}>{dayLabel(d.date, i)}</td>
+                  <td style={{ padding: '8px 10px' }}>{cap(d.description) || '—'}</td>
+                  <td style={{ padding: '8px 10px' }}>{d.tempMinC}° – {d.tempMaxC}°C</td>
+                  <td style={{ padding: '8px 10px' }}>{d.humidityAvg}%</td>
+                  <td style={{ padding: '8px 10px', fontWeight: 600, color: RAIN_COLOR(d.rainChancePct) }}>
+                    {d.rainChancePct}% <span style={{ fontWeight: 400, color: '#64748b' }}>({d.rainChanceLabel})</span>
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>{d.rainMm}</td>
+                  <td style={{ padding: '8px 10px' }}>{d.windMaxKmh} km/h</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WeatherAlertsTab() {
   const [district, setDistrict] = useState('');
   const [result, setResult] = useState(null);
@@ -430,7 +512,7 @@ function WeatherAlertsTab() {
     <div style={card}>
       <h2 style={cardTitle}>Weather alerts for farming / ಹವಾಮಾನ ಎಚ್ಚರಿಕೆ</h2>
       <p style={cardSub}>
-        Rule-based alerts from the 5-day forecast (rain, heat, cold, wind). Each alert shows the values that triggered it.
+        Full weather details (temperature, humidity, chance of rain, wind) plus rule-based farming alerts from the 5-day forecast. Each alert shows the values that triggered it.
       </p>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -448,9 +530,13 @@ function WeatherAlertsTab() {
       {result?.success && (
         <div style={{ marginTop: 16 }}>
           <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 8 }}>
-            Forecast for <strong>{result.city || result.district}</strong>
+            Forecast for <strong>{result.district}</strong>
             {result.stale ? ' (showing last saved forecast — live service was unreachable)' : ''}
           </p>
+          <WeatherDetails weather={result.weather} name={result.district} />
+          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 8 }}>
+            Farming alerts
+          </div>
           {(result.alerts || []).map((a, i) => {
             const st = SEVERITY_STYLE[a.severity] || SEVERITY_STYLE.low;
             return (

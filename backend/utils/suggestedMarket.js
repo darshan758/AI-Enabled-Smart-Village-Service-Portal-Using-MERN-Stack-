@@ -10,6 +10,7 @@
 // clearly labeled as such in the response, never presented as exact.
 
 const { distanceBetweenDistrictsKm } = require('./districtCoordinates');
+const { canonicalDistrict } = require('./districtSynonyms');
 
 // Rough, configurable assumption: cost to move one quintal (100kg) of
 // produce one kilometre by local transport. This is a placeholder
@@ -17,9 +18,9 @@ const { distanceBetweenDistrictsKm } = require('./districtCoordinates');
 // hire — real cost varies a lot by region, road quality, and season.
 const ASSUMED_TRANSPORT_COST_PER_KM_PER_QUINTAL = 2; // INR
 
-function suggestMarkets({ records, commodity, fromDistrict, quintals = 1 }) {
+function suggestMarkets({ records, commodity, commodityRegex, fromDistrict, quintals = 1 }) {
   const bare = commodity.toLowerCase();
-  const matching = records.filter((r) => (r.commodity || '').toLowerCase().includes(bare));
+  const matching = records.filter((r) => commodityRegex ? commodityRegex.test(r.commodity || '') : (r.commodity || '').toLowerCase().includes(bare));
 
   // Group by market, average the modal price per market.
   const byMarket = new Map();
@@ -34,7 +35,7 @@ function suggestMarkets({ records, commodity, fromDistrict, quintals = 1 }) {
     .filter((m) => m.prices.length > 0)
     .map((m) => {
       const avgModalPrice = Math.round(m.prices.reduce((a, b) => a + b, 0) / m.prices.length);
-      const distanceKm = distanceBetweenDistrictsKm(fromDistrict, m.district);
+      const distanceKm = distanceBetweenDistrictsKm(canonicalDistrict(fromDistrict), canonicalDistrict(m.district));
       const estimatedTransportCost =
         distanceKm != null ? Math.round(distanceKm * ASSUMED_TRANSPORT_COST_PER_KM_PER_QUINTAL * quintals) : null;
       const netPricePerQuintal =
