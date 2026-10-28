@@ -288,4 +288,76 @@ async function fetchMandiPrices(opts = {}) {
   throw liveErr || new Error(lastFailureMessage || 'Market price service is unavailable.');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public entry point. Same input/output as before ({ records, total }) plus
+//   source: 'live' | 'cached' | 'sample',  asOf: ISO date,  notice: text|null
+// so existing callers keep working. If the live API fails, falls back to the
+// last saved copy, then to clearly-labelled sample prices (see mandiFallback.js).
+// ─────────────────────────────────────────────────────────────────────────────
+const LIVE_RETRY_AFTER_MS = 60 * 1000; // after a failure, don't make every request wait on a dead host
+let lastLiveFailureAt = 0;
+let lastFailureMessage = '';
+const lastPersisted = new Map(); // key -> fetchedAt already saved to MongoDB
+
+const fallbackEnabled = () => String(process.env.MANDI_FALLBACK || 'on').toLowerCase() !== 'off';
+const fmtDate = (d) => new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+async function fetchMandiPrices(opts = {}) {
+  const key = cacheKey(opts);
+  let liveErr = null;
+
+  const skipLive = fallbackEnabled() && lastLiveFailureAt && Date.now() - lastLiveFailureAt < LIVE_RETRY_AFTER_MS;
+
+  if (!skipLive) {
+    try {
+      const r = await fetchMandiPricesLive(opts);
+      lastLiveFailureAt = 0;
+      const fetchedAt = r.fetchedAt || Date.now();
+      if (fallbackEnabled() && !r.partial && r.records.length && lastPersisted.get(key) !== fetchedAt) {
+        lastPersisted.set(key, fetchedAt);
+        fallback.savePersisted(key, { records: r.records, total: r.total, fetchedAt }).catch(() => {});
+      }
+      return { ...r, source: 'live', asOf: new Date(fetchedAt).toISOString(), notice: null };
+    } catch (err) {
+      if (!fallbackEnabled()) throw err;
+      liveErr = err;
+      lastLiveFailureAt = Date.now();
+      lastFailureMessage = err.message;
+      console.warn(`[Agri] Live prices unavailable (${err.message}) - using fallback data.`);
+    }
+  }
+
+  // 2) last copy still in memory (expired entries are never deleted from the Map)
+  const stale = cache.get(key);
+  if (stale && stale.data.records.length) {
+    const at = stale.data.fetchedAt || Date.now();
+    return {
+      ...stale.data, source: 'cached', asOf: new Date(at).toISOString(),
+      notice: `Live prices are temporarily unavailable. Showing the last saved prices from ${fmtDate(at)}.`,
+    };
+  }
+
+  // 3) last copy saved in MongoDB (survives server restarts)
+  const saved = await fallback.loadPersisted(key);
+  if (saved) {
+    return {
+      records: saved.records, total: saved.total, source: 'cached', asOf: new Date(saved.fetchedAt).toISOString(),
+      notice: `Live prices are temporarily unavailable. Showing the last saved prices from ${fmtDate(saved.fetchedAt)}.`,
+    };
+  }
+
+  // 4) sample data - Karnataka only, and only for demo/first-run
+  const wantedState = (opts.state || 'Karnataka').toLowerCase();
+  if (wantedState === 'karnataka') {
+    const sample = fallback.getSample('Karnataka');
+    return {
+      ...sample, source: 'sample', asOf: new Date().toISOString(),
+      notice: 'Live government prices are unavailable right now. These are SAMPLE prices for demonstration only, not real market rates.',
+    };
+  }
+
+  // Nothing to fall back to: surface the original, friendly error.
+  throw liveErr || new Error(lastFailureMessage || 'Market price service is unavailable.');
+}
+
 module.exports = { fetchMandiPrices };
